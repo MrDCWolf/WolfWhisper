@@ -1,78 +1,173 @@
-import Foundation
-import AVFoundation
-
-enum AudioServiceError: Error {
-    case audioEngineNotAvailable
-    case inputNodeNotAvailable
-    case fileCreationFailed
-}
+@preconcurrency import AVFoundation
+import AppKit
+import os
 
 @MainActor
-class AudioService {
-    static let shared = AudioService()
-    
-    private var audioEngine: AVAudioEngine?
-    private var audioFile: AVAudioFile?
-    
+class AudioService: ObservableObject {
+    private let appState: AppStateModel
+    private let transcriptionService: TranscriptionService
+
+    private var audioRecorder: AVAudioRecorder?
     private var audioFileURL: URL?
-    
-    func startRecording() throws {
-        // 1. Setup Audio Engine
-        audioEngine = AVAudioEngine()
-        guard let engine = audioEngine else {
-            throw AudioServiceError.audioEngineNotAvailable
-        }
-        
-        // 2. Get the input node for the microphone
-        let inputNode = engine.inputNode
-        let inputFormat = inputNode.outputFormat(forBus: 0)
-        
-        // 3. Setup a file to save the audio to
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        self.audioFileURL = documentsPath.appendingPathComponent("recording.caf")
-        
-        guard let fileURL = self.audioFileURL else {
-            throw AudioServiceError.fileCreationFailed
-        }
-        
-        // Delete previous recording if it exists
-        try? FileManager.default.removeItem(at: fileURL)
-        
-        audioFile = try AVAudioFile(forWriting: fileURL, settings: inputFormat.settings)
-        
-        // 4. Install a "tap" on the input node to receive audio buffers
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] (buffer, when) in
-            do {
-                try self?.audioFile?.write(from: buffer)
-            } catch {
-                print("Error writing audio buffer to file: \(error)")
-            }
-        }
-        
-        // 5. Prepare and start the engine
-        engine.prepare()
-        try engine.start()
-        
-        print("🎙️ Recording started...")
+    private var isRecording = false
+
+    init(appState: AppStateModel, transcriptionService: TranscriptionService) {
+        self.appState = appState
+        self.transcriptionService = transcriptionService
     }
     
-    func stopRecording() -> URL? {
-        guard let engine = audioEngine else {
-            print("Audio engine not running.")
-            return nil
+    @MainActor
+    func startRecording() {
+        guard !isRecording else {
+            print("⚠️ Already recording")
+            return
         }
         
-        engine.stop()
-        engine.inputNode.removeTap(onBus: 0)
+        Task {
+            await self.setupAndStartRecording()
+        }
+    }
+
+    @MainActor
+    private func setupAndStartRecording() async {
+        print("🎤 Starting recording setup...")
         
-        // Close the file
-        audioFile = nil
+        // First check microphone permissions
+        let microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        print("🔐 Microphone permission status: \(microphoneStatus.rawValue)")
         
-        print("👍 Recording stopped.")
+        switch microphoneStatus {
+        case .notDetermined:
+            print("🔐 Requesting microphone permission...")
+            let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            if !granted {
+                appState.updateState(to: .idle, message: "Microphone access denied")
+                return
+            }
+            print("✅ Microphone permission granted")
+        case .denied, .restricted:
+            appState.updateState(to: .idle, message: "Microphone access denied. Please enable in System Preferences.")
+            return
+        case .authorized:
+            print("✅ Microphone permission already granted")
+        @unknown default:
+            appState.updateState(to: .idle, message: "Unknown microphone permission status")
+            return
+        }
         
-        // Reset the audio engine instance
-        self.audioEngine = nil
+        do {
+            // Create temporary file
+            let fileManager = FileManager.default
+            let tempDir = fileManager.temporaryDirectory
+            let filePath = tempDir.appendingPathComponent("wolfwhisper_\(Date().timeIntervalSince1970).m4a")
+            print("📁 Recording to: \(filePath)")
+            
+            // Configure recording settings
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44100.0,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+            
+            // Create and configure recorder
+            audioRecorder = try AVAudioRecorder(url: filePath, settings: settings)
+            audioRecorder?.isMeteringEnabled = true
+            audioRecorder?.prepareToRecord()
+            
+            // Start recording
+            let success = audioRecorder?.record() ?? false
+            if success {
+                isRecording = true
+                audioFileURL = filePath
+                appState.updateState(to: .recording)
+                print("✅ Recording started successfully")
+            } else {
+                print("❌ Failed to start recording")
+                appState.updateState(to: .idle, message: "Failed to start recording")
+            }
+            
+        } catch {
+            print("❌ Failed to setup recording: \(error)")
+            appState.updateState(to: .idle, message: "Failed to setup recording: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    func stopRecording() {
+        print("🛑 Stop recording requested")
+        guard isRecording else {
+            print("⚠️ Not currently recording")
+            return
+        }
         
-        return self.audioFileURL
+        finishRecording()
+    }
+
+    @MainActor
+    private func finishRecording() {
+        print("🏁 Finishing recording...")
+        guard isRecording else {
+            print("⚠️ finishRecording called but not recording")
+            return
+        }
+        
+        isRecording = false
+        
+        // Stop the recorder
+        audioRecorder?.stop()
+        audioRecorder = nil
+        
+        guard let audioFileURL = self.audioFileURL else {
+            appState.updateState(to: .idle, message: "No audio file to transcribe")
+            return
+        }
+
+        Task {
+            await transcribeAudio(at: audioFileURL)
+        }
+    }
+
+    @MainActor
+    func cancelRecording() {
+        print("❌ Cancelling recording")
+        isRecording = false
+        
+        // Stop the recorder
+        audioRecorder?.stop()
+        audioRecorder = nil
+        
+        if let url = audioFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        audioFileURL = nil
+        appState.updateState(to: .idle)
+        print("🗑️ Recording cancelled and file deleted.")
+    }
+
+    @MainActor
+    private func transcribeAudio(at url: URL) async {
+        print("📝 Starting transcription...")
+        appState.updateState(to: .transcribing)
+        do {
+            let transcribedText = try await transcriptionService.transcribe(audioURL: url)
+            print("✅ Transcription successful: \(transcribedText)")
+
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(transcribedText, forType: .string)
+            appState.updateState(to: .idle, message: "Copied to clipboard!")
+
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: url)
+            audioFileURL = nil
+
+        } catch {
+            print("🛑 Transcription failed: \(error)")
+            appState.updateState(to: .idle, message: "Transcription failed: \(error.localizedDescription)")
+            
+            // Clean up temp file on error
+            try? FileManager.default.removeItem(at: url)
+            audioFileURL = nil
+        }
     }
 } 

@@ -15,12 +15,14 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // Dependencies will be added here as needed
+        // Removed Atomics package
     ],
     targets: [
         .executableTarget(
             name: "WolfWhisper",
-            dependencies: [],
+            dependencies: [
+                // Removed Atomics product
+            ],
             path: "WolfWhisper",
             exclude: ["Info.plist"],
             resources: [

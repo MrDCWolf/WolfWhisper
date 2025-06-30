@@ -1,104 +1,127 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Bindable var appState: AppStateModel
-    
     @State private var apiKey: String = ""
-    @State private var showSaved: Bool = false
-    @State private var hotkey: String = "⌘⇧D" // Placeholder
+    @StateObject private var appState = AppStateModel()
+    
+    // Create services 
+    private let keychainService = KeychainService.shared
+    @State private var audioService: AudioService?
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Text("WolfWhisper")
-                .font(.headline)
+                .font(.title)
                 .fontWeight(.bold)
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Status: \(appState.statusText)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Text("AI-Powered Voice Dictation")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            Divider()
+            
+            // API Key Section
+            VStack(alignment: .leading, spacing: 10) {
+                Text("OpenAI API Key")
+                    .font(.headline)
                 
-                HStack {
-                    Circle()
-                        .fill(appState.currentState == .recording ? Color.red : Color.green)
-                        .frame(width: 8, height: 8)
-                    Text(appState.currentState == .recording ? "Recording..." : "Idle")
-                        .font(.caption)
+                SecureField("Enter your OpenAI API key", text: $apiKey)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                
+                Button("Save API Key") {
+                    _ = keychainService.saveApiKey(apiKey)
                 }
+                .disabled(apiKey.isEmpty)
             }
             
             Divider()
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text("OpenAI API Key")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                
-                SecureField("Enter your API key", text: $apiKey, onCommit: saveApiKey)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(width: 250)
-                
-                HStack {
-                    Button("Save") { saveApiKey() }
-                        .controlSize(.small)
-                    if showSaved {
-                        Text("Saved!")
-                            .font(.caption2)
-                            .foregroundColor(.green)
+            // Recording Section
+            VStack(spacing: 15) {
+                // Main Action Button
+                Button(action: {
+                    toggleRecording()
+                }) {
+                    // Button appearance changes based on state
+                    ZStack {
+                        Circle()
+                            .foregroundColor(recordButtonColor())
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: recordButtonIcon())
+                            .font(.system(size: 40))
+                            .foregroundColor(.white)
                     }
                 }
-                
-                Text("Your API key is stored securely in the macOS Keychain")
-                    .font(.caption2)
+                .buttonStyle(PlainButtonStyle()) // Removes default button styling
+
+                // Status Text
+                Text(appState.statusText)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Spacer()
+            
+            VStack {
+                Text("Click the microphone to start recording")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Global Hotkey")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                HStack {
-                    Text(hotkey)
-                        .padding(6)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
-                    Text("(Configurable soon)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Divider()
-            
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         }
         .padding()
-        .frame(width: 280)
-        .onAppear(perform: loadApiKey)
-    }
-    
-    private func saveApiKey() {
-        if KeychainService.shared.saveApiKey(apiKey) {
-            showSaved = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                showSaved = false
+        .frame(minWidth: 400, minHeight: 300)
+        .onAppear {
+            // Initialize audioService with the correct appState instance
+            if audioService == nil {
+                audioService = AudioService(
+                    appState: appState, 
+                    transcriptionService: TranscriptionService(keychainService: keychainService)
+                )
+            }
+            
+            Task {
+                self.apiKey = await MainActor.run {
+                    keychainService.loadApiKey()
+                } ?? ""
             }
         }
     }
     
-    private func loadApiKey() {
-        if let key = KeychainService.shared.loadApiKey() {
-            apiKey = key
+    private func toggleRecording() {
+        guard let audioService = audioService else { return }
+        
+        if appState.currentState == .recording {
+            audioService.stopRecording()
+        } else {
+            audioService.startRecording()
+        }
+    }
+    
+    private func recordButtonColor() -> Color {
+        switch appState.currentState {
+        case .idle:
+            return .blue
+        case .recording:
+            return .red
+        case .transcribing:
+            return .orange
+        }
+    }
+    
+    private func recordButtonIcon() -> String {
+        switch appState.currentState {
+        case .idle:
+            return "mic.circle.fill"
+        case .recording:
+            return "stop.circle.fill"
+        case .transcribing:
+            return "waveform.circle.fill"
         }
     }
 }
 
 #Preview {
-    ContentView(appState: AppStateModel())
+    ContentView()
 } 

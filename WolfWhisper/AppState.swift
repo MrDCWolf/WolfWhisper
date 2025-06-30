@@ -2,32 +2,32 @@ import Foundation
 import SwiftUI
 
 // The various states the application can be in.
-enum AppState: String {
-    case idle = "mic"
-    case recording = "mic.fill"
-    case processing = "brain"
-    case error = "exclamationmark.triangle"
+enum AppState {
+    case idle
+    case recording
+    case transcribing
 }
 
 // An observable class to manage and publish the application's state.
-@Observable
-class AppStateModel {
-    var currentState: AppState = .idle
-    var statusText: String = "Ready"
+@MainActor
+class AppStateModel: ObservableObject {
+    @Published var currentState: AppState = .idle
+    @Published var statusText: String = "Ready to record"
 
-    @MainActor
     func updateState(to newState: AppState, message: String? = nil) {
-        self.currentState = newState
+        currentState = newState
         
-        switch newState {
-        case .idle:
-            self.statusText = message ?? "Ready"
-        case .recording:
-            self.statusText = message ?? "Recording..."
-        case .processing:
-            self.statusText = message ?? "Processing..."
-        case .error:
-            self.statusText = message ?? "An error occurred."
+        if let message = message {
+            statusText = message
+        } else {
+            switch newState {
+            case .idle:
+                statusText = "Ready to record"
+            case .recording:
+                statusText = "Recording... Click to stop"
+            case .transcribing:
+                statusText = "Transcribing audio..."
+            }
         }
     }
 } 

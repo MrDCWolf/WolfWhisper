@@ -8,18 +8,16 @@
 
 /* Begin PBXBuildFile section */
 		065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E288A012473F7F722F7063 /* KeychainService.swift */; };
-		3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB11 /* HotkeyService.swift */; };
 		4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E868304B1233FA19B9C104 /* ContentView.swift */; };
+		4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */; };
 		5268EBFBEA28B87F3565C8F0 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908A50274BE4BBC01EC555BB /* AppState.swift */; };
 		63A90D417BBC2C693C6C5361 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */; };
 		725587C72BEAD462F98EFE31 /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9800E2A361A7808509B7A68 /* AudioService.swift */; };
-		9E7E0C0AC984558A93E8A83C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B717FCF392B21A0BD1FD74 /* AppDelegate.swift */; };
 		F71C795448F970245BBB71E5 /* WolfWhisperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		04B717FCF392B21A0BD1FD74 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		498948B290C8A7419E2BEB11 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
+		63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WolfWhisperApp.swift; sourceTree = "<group>"; };
 		908A50274BE4BBC01EC555BB /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		A9E868304B1233FA19B9C104 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -42,14 +40,13 @@
 		6FA780CE62DD58151EAE9855 /* WolfWhisper */ = {
 			isa = PBXGroup;
 			children = (
-				04B717FCF392B21A0BD1FD74 /* AppDelegate.swift */,
 				908A50274BE4BBC01EC555BB /* AppState.swift */,
 				CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */,
 				D9800E2A361A7808509B7A68 /* AudioService.swift */,
 				A9E868304B1233FA19B9C104 /* ContentView.swift */,
-				498948B290C8A7419E2BEB11 /* HotkeyService.swift */,
 				CE0BCEC3CE08393FEA8781B8 /* Info.plist */,
 				B9E288A012473F7F722F7063 /* KeychainService.swift */,
+				63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */,
 				6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */,
 			);
 			path = WolfWhisper;
@@ -93,10 +90,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					005F35AA5D0608B734D09A1B = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
-					};
 				};
 			};
 			buildConfigurationList = C2C02DBB294DD2E0ADF109E2 /* Build configuration list for PBXProject "WolfWhisper" */;
@@ -134,12 +127,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9E7E0C0AC984558A93E8A83C /* AppDelegate.swift in Sources */,
 				5268EBFBEA28B87F3565C8F0 /* AppState.swift in Sources */,
 				725587C72BEAD462F98EFE31 /* AudioService.swift in Sources */,
 				4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */,
-				3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */,
 				065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */,
+				4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */,
 				F71C795448F970245BBB71E5 /* WolfWhisperApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -151,19 +143,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wolfwhisper.app;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
@@ -203,10 +190,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -268,10 +253,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -297,19 +280,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wolfwhisper.app;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
