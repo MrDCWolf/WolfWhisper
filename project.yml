@@ -1,0 +1,35 @@
+name: WolfWhisper
+options:
+  bundleIdPrefix: com.wolfwhisper
+configs:
+  Debug: debug
+  Release: release
+settings:
+  MACOSX_DEPLOYMENT_TARGET: 14.0
+  DEVELOPMENT_TEAM: ""
+  CODE_SIGN_STYLE: Automatic
+targets:
+  WolfWhisper:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - WolfWhisper
+    resources:
+      - WolfWhisper/Assets.xcassets
+      - WolfWhisper/Info.plist
+    info:
+      path: WolfWhisper/Info.plist
+      properties:
+        NSMicrophoneUsageDescription: "WolfWhisper needs microphone access to record your voice for dictation."
+        LSUIElement: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.wolfwhisper.app
+      SWIFT_VERSION: 6.0
+      GENERATE_INFOPLIST_FILE: NO
+      ENABLE_PREVIEWS: YES
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      MARKETING_VERSION: 1.0
+      CURRENT_PROJECT_VERSION: 1
+      INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity 
