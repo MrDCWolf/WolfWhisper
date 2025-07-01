@@ -81,8 +81,6 @@ struct SettingsView: View {
     }
 }
 
-
-
 struct ModernGeneralSettingsView: View {
     @ObservedObject var settings: SettingsModel
     
@@ -118,11 +116,6 @@ struct ModernGeneralSettingsView: View {
                 ModernSettingsSection(title: "Behavior") {
                     VStack(alignment: .leading, spacing: 16) {
                         ModernToggle(
-                            title: "Auto-transcribe after recording",
-                            isOn: $settings.autoTranscribe
-                        )
-                        
-                        ModernToggle(
                             title: "Show in menu bar",
                             isOn: $settings.showInMenuBar
                         )
@@ -136,12 +129,9 @@ struct ModernGeneralSettingsView: View {
             }
             .padding(20)
         }
-
-        .onChange(of: settings.apiKey) { _, _ in settings.saveSettings() }
-        .onChange(of: settings.selectedModel) { _, _ in settings.saveSettings() }
-        .onChange(of: settings.autoTranscribe) { _, _ in settings.saveSettings() }
-        .onChange(of: settings.showInMenuBar) { _, _ in settings.saveSettings() }
-        .onChange(of: settings.launchAtLogin) { _, _ in settings.saveSettings() }
+        .onDisappear {
+            settings.saveSettings()
+        }
     }
 }
 
@@ -206,6 +196,7 @@ struct ModernTextFieldStyle: TextFieldStyle {
 
 struct ModernAudioSettingsView: View {
     @ObservedObject var settings: SettingsModel
+    @State private var currentMicrophone: String = "System Default"
     
     var body: some View {
         ScrollView {
@@ -213,60 +204,34 @@ struct ModernAudioSettingsView: View {
                 ModernSettingsSection(title: "Input Settings") {
                     VStack(alignment: .leading, spacing: 16) {
                         ModernSettingsField(
-                            title: "Microphone",
-                            description: "Uses the microphone selected in System Preferences → Sound → Input"
+                            title: "Current Microphone",
+                            description: "Microphone selected in System Preferences → Sound → Input"
                         ) {
-                            Text("System Default")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(.white.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                    }
-                }
-                
-                ModernSettingsSection(title: "Recording Quality") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ModernSettingsField(
-                            title: "Sample Rate"
-                        ) {
-                            Text("44.1 kHz (Recommended)")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(.white.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        
-                        ModernSettingsField(
-                            title: "Format"
-                        ) {
-                            Text("M4A (Recommended)")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(.white.opacity(0.3), lineWidth: 1)
-                                )
+                            HStack {
+                                Text(currentMicrophone)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
                         }
                     }
                 }
             }
             .padding(20)
         }
-
+        .task {
+            // Load microphone name asynchronously to avoid SwiftUI update loops
+            await MainActor.run {
+                currentMicrophone = AudioService.shared.getCurrentMicrophoneName()
+            }
+        }
     }
 }
 
@@ -298,33 +263,12 @@ struct ModernHotkeySettingsView: View {
                         }
                     }
                 }
-                
-                if settings.hotkeyEnabled {
-                    ModernSettingsSection(title: "Hotkey Behavior") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ModernSettingsField(
-                                title: "After Transcription",
-                                description: "What happens when transcription is complete"
-                            ) {
-                                Text("Copy to clipboard and paste")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(.white.opacity(0.3), lineWidth: 1)
-                                    )
-                            }
-                        }
-                    }
-                }
             }
             .padding(20)
         }
-
-        .onChange(of: settings.hotkeyEnabled) { _, _ in settings.saveSettings() }
+        .onDisappear {
+            settings.saveSettings()
+        }
     }
 }
 
@@ -371,14 +315,14 @@ struct ModernAdvancedSettingsView: View {
                             title: "Export Debug Log",
                             style: .secondary
                         ) {
-                            // TODO: Export debug information
+                            settings.exportDebugLog()
                         }
                         
                         ModernActionButton(
                             title: "Check Permissions",
                             style: .secondary
                         ) {
-                            // TODO: Re-check all permissions
+                            settings.checkAllPermissions()
                         }
                     }
                 }
@@ -418,35 +362,14 @@ struct ModernAdvancedSettingsView: View {
             }
             .padding(20)
         }
-
         .alert("Reset Settings", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
-                resetAllSettings()
+                settings.resetAllSettings()
             }
         } message: {
             Text("This will reset all settings to their default values. This action cannot be undone.")
         }
-    }
-    
-    private func resetAllSettings() {
-        // Reset UserDefaults
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "selectedModel")
-        defaults.removeObject(forKey: "hotkeyEnabled")
-        defaults.removeObject(forKey: "hotkeyModifiers")
-        defaults.removeObject(forKey: "hotkeyKey")
-        defaults.removeObject(forKey: "hotkeyDisplay")
-        defaults.removeObject(forKey: "autoTranscribe")
-        defaults.removeObject(forKey: "showInMenuBar")
-        defaults.removeObject(forKey: "launchAtLogin")
-        defaults.removeObject(forKey: "hasCompletedOnboarding")
-        
-        // Clear keychain
-        KeychainService.shared.deleteApiKey()
-        
-        // Reload settings
-        settings.loadSettings()
     }
 }
 
@@ -634,6 +557,8 @@ struct ModernSidebarTab: View {
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 }
+
+
 
 
 

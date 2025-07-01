@@ -1,5 +1,9 @@
 import Foundation
 import SwiftUI
+import ApplicationServices
+import AVFoundation
+import AppKit
+import UniformTypeIdentifiers
 
 // The various states the application can be in.
 enum AppState {
@@ -46,7 +50,6 @@ class SettingsModel: ObservableObject {
     @Published var hotkeyModifiers: UInt = 0 // Raw modifier flags
     @Published var hotkeyKey: UInt16 = 0 // Raw key code
     @Published var hotkeyDisplay: String = "⌘⇧D" // Stored property for UI display
-    @Published var autoTranscribe: Bool = true
     @Published var showInMenuBar: Bool = false
     @Published var launchAtLogin: Bool = false
     
@@ -67,10 +70,26 @@ class SettingsModel: ObservableObject {
         // Load other settings from UserDefaults
         selectedModel = WhisperModel(rawValue: UserDefaults.standard.string(forKey: "selectedModel") ?? WhisperModel.whisper1.rawValue) ?? .whisper1
         hotkeyEnabled = UserDefaults.standard.bool(forKey: "hotkeyEnabled")
-        hotkeyModifiers = UInt(UserDefaults.standard.integer(forKey: "hotkeyModifiers"))
-        hotkeyKey = UInt16(UserDefaults.standard.integer(forKey: "hotkeyKey"))
-        hotkeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "⌘⇧D"
-        autoTranscribe = UserDefaults.standard.bool(forKey: "autoTranscribe")
+        
+        // Load hotkey settings with proper defaults for ⌘⇧D
+        let savedModifiers = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int
+        let savedKey = UserDefaults.standard.object(forKey: "hotkeyKey") as? Int
+        
+        if savedModifiers == nil || savedKey == nil {
+            // Set default ⌘⇧D hotkey using Carbon modifier flags
+            hotkeyModifiers = UInt(256 + 512) // cmdKey + shiftKey in Carbon
+            hotkeyKey = 2 // D key
+            hotkeyDisplay = "⌘⇧D"
+            // Save the defaults immediately
+            UserDefaults.standard.set(Int(hotkeyModifiers), forKey: "hotkeyModifiers")
+            UserDefaults.standard.set(Int(hotkeyKey), forKey: "hotkeyKey")
+            UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
+        } else {
+            hotkeyModifiers = UInt(savedModifiers!)
+            hotkeyKey = UInt16(savedKey!)
+            hotkeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "⌘⇧D"
+        }
+        
         showInMenuBar = UserDefaults.standard.bool(forKey: "showInMenuBar")
         launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
     }
@@ -87,7 +106,6 @@ class SettingsModel: ObservableObject {
         UserDefaults.standard.set(Int(hotkeyModifiers), forKey: "hotkeyModifiers")
         UserDefaults.standard.set(Int(hotkeyKey), forKey: "hotkeyKey")
         UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
-        UserDefaults.standard.set(autoTranscribe, forKey: "autoTranscribe")
         UserDefaults.standard.set(showInMenuBar, forKey: "showInMenuBar")
         UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
     }
@@ -104,6 +122,115 @@ class SettingsModel: ObservableObject {
     
     func loadApiKey() {
         apiKey = keychainService.loadApiKey() ?? ""
+    }
+    
+    func exportDebugLog() {
+        let debugInfo = generateDebugInfo()
+        
+        let savePanel = NSSavePanel()
+        savePanel.title = "Export Debug Log"
+        savePanel.nameFieldStringValue = "wolfwhisper-debug-\(Date().timeIntervalSince1970).txt"
+        savePanel.allowedContentTypes = [.plainText]
+        
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                do {
+                    try debugInfo.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    print("Failed to export debug log: \(error)")
+                }
+            }
+        }
+    }
+    
+    private func generateDebugInfo() -> String {
+        var info = [String]()
+        
+        info.append("WolfWhisper Debug Log")
+        info.append("Generated: \(Date())")
+        info.append("Version: 1.4.0")
+        info.append("")
+        
+        info.append("=== Settings ===")
+        info.append("Selected Model: \(selectedModel.rawValue)")
+        info.append("Hotkey Enabled: \(hotkeyEnabled)")
+        info.append("Hotkey Display: \(hotkeyDisplay)")
+        info.append("Hotkey Modifiers: \(hotkeyModifiers)")
+        info.append("Hotkey Key: \(hotkeyKey)")
+        info.append("Show in Menu Bar: \(showInMenuBar)")
+        info.append("Launch at Login: \(launchAtLogin)")
+        info.append("")
+        
+        info.append("=== System ===")
+        info.append("macOS Version: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        info.append("Current Microphone: \(AudioService.shared.getCurrentMicrophoneName())")
+        info.append("")
+        
+        info.append("=== Permissions ===")
+        info.append("Microphone Permission: \(checkMicrophonePermission())")
+        info.append("Accessibility Permission: \(checkAccessibilityPermission())")
+        info.append("")
+        
+        info.append("=== UserDefaults ===")
+        let defaults = UserDefaults.standard
+        let keys = ["selectedModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "hasCompletedOnboarding"]
+        for key in keys {
+            info.append("\(key): \(defaults.object(forKey: key) ?? "nil")")
+        }
+        
+        return info.joined(separator: "\n")
+    }
+    
+    private func checkMicrophonePermission() -> String {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return "Granted"
+        case .denied: return "Denied"
+        case .restricted: return "Restricted"
+        case .notDetermined: return "Not Determined"
+        @unknown default: return "Unknown"
+        }
+    }
+    
+    private func checkAccessibilityPermission() -> String {
+        return AXIsProcessTrusted() ? "Granted" : "Denied"
+    }
+    
+    func resetAllSettings() {
+        // Reset UserDefaults
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "selectedModel")
+        defaults.removeObject(forKey: "hotkeyEnabled")
+        defaults.removeObject(forKey: "hotkeyModifiers")
+        defaults.removeObject(forKey: "hotkeyKey")
+        defaults.removeObject(forKey: "hotkeyDisplay")
+        defaults.removeObject(forKey: "showInMenuBar")
+        defaults.removeObject(forKey: "launchAtLogin")
+        defaults.removeObject(forKey: "hasCompletedOnboarding")
+        
+        // Clear keychain
+        keychainService.deleteApiKey()
+        
+        // Reload settings
+        loadSettings()
+    }
+    
+    func checkAllPermissions() {
+        // Request microphone permission
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            DispatchQueue.main.async {
+                print("Microphone permission: \(granted ? "granted" : "denied")")
+            }
+        }
+        
+        // Check accessibility permission
+        let hasAccessibility = AXIsProcessTrusted()
+        if !hasAccessibility {
+            // Open System Preferences to Security & Privacy
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+            NSWorkspace.shared.open(url)
+        }
+        
+        print("Accessibility permission: \(hasAccessibility ? "granted" : "denied - opening System Preferences")")
     }
 }
 
@@ -210,7 +337,20 @@ class AppStateModel: ObservableObject {
     }
     
     private func hasAccessibilityPermissions() -> Bool {
-        // Import Carbon and check accessibility permissions
-        return true // For now, assume we have it - we'll implement this properly
+        // Check if the app has accessibility permissions
+        let trusted = AXIsProcessTrusted()
+        return trusted
+    }
+    
+    func startRecording() async {
+        // This will be called from menu bar - delegate to audio service
+        updateState(to: .recording)
+        // The actual recording logic should be handled by ContentView or AudioService
+    }
+    
+    func requestAccessibilityPermission() {
+        // Open System Preferences to Accessibility settings
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 } 

@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import CoreAudio
 
 @MainActor
 class AudioService: NSObject, ObservableObject {
@@ -15,6 +16,52 @@ class AudioService: NSObject, ObservableObject {
     
     private override init() {
         super.init()
+    }
+    
+    func getCurrentMicrophoneName() -> String {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var deviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &size,
+            &deviceID
+        )
+        
+        guard status == noErr else {
+            return "System Default"
+        }
+        
+        // Get device name
+        address.mSelector = kAudioDevicePropertyDeviceNameCFString
+        address.mScope = kAudioObjectPropertyScopeGlobal
+        
+        var deviceName: Unmanaged<CFString>?
+        size = UInt32(MemoryLayout<Unmanaged<CFString>>.size)
+        
+        let nameStatus = AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &size,
+            &deviceName
+        )
+        
+        if nameStatus == noErr, let name = deviceName?.takeUnretainedValue() {
+            return name as String
+        }
+        
+        return "System Default"
     }
     
     func startRecording() async throws {

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 // Custom panel class for chrome-less, non-movable floating window
 class FloatingPanel: NSPanel {
@@ -52,6 +53,9 @@ struct WolfWhisperApp: App {
         .onChange(of: appState.currentState) { _, newValue in
             handleStateChange(newValue)
         }
+        .onChange(of: appState.settings.launchAtLogin) { _, newValue in
+            handleLaunchAtLoginChange(newValue)
+        }
         
         // Settings window as a separate scene
         WindowGroup("Settings", id: "settings") {
@@ -61,6 +65,12 @@ struct WolfWhisperApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
         .handlesExternalEvents(matching: Set(arrayLiteral: "settings"))
+        
+        // Menu Bar Extra - Fixed to avoid publishing loop by removing binding
+        MenuBarExtra("WolfWhisper", systemImage: "mic.circle.fill") {
+            MenuBarView(appState: appState)
+        }
+        .menuBarExtraStyle(.window)
     }
     
     private func handleStateChange(_ newState: AppState) {
@@ -142,6 +152,18 @@ struct WolfWhisperApp: App {
             window.close()
         }
     }
+    
+    private func handleLaunchAtLoginChange(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            print("Failed to \(enabled ? "register" : "unregister") launch at login: \(error)")
+        }
+    }
 }
 
 class FloatingWindowDelegate: NSObject, NSWindowDelegate {
@@ -168,5 +190,62 @@ struct SettingsMenuButton: View {
             openWindow(id: "settings")
         }
         .keyboardShortcut(",", modifiers: .command)
+    }
+}
+
+struct MenuBarView: View {
+    @ObservedObject var appState: AppStateModel
+    @Environment(\.openWindow) private var openWindow
+    
+    var body: some View {
+        // Only show menu if the setting is enabled
+        if appState.settings.showInMenuBar {
+            VStack(alignment: .leading, spacing: 8) {
+                // Status
+                HStack {
+                    Image(systemName: "mic.circle.fill")
+                        .foregroundColor(.blue)
+                    Text(appState.statusText)
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                
+                Divider()
+                
+                // Quick Actions
+                Button("Start Recording") {
+                    // Trigger recording
+                    Task {
+                        await appState.startRecording()
+                    }
+                }
+                .disabled(appState.currentState != .idle)
+                
+                Button("Settings...") {
+                    openWindow(id: "settings")
+                }
+                
+                Divider()
+                
+                Button("Quit WolfWhisper") {
+                    NSApplication.shared.terminate(nil)
+                }
+            }
+            .padding(.bottom, 8)
+            .frame(width: 200)
+        } else {
+            // Show a minimal view when menu bar is disabled
+            VStack {
+                Text("Menu bar disabled")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Button("Enable in Settings") {
+                    openWindow(id: "settings")
+                }
+            }
+            .padding(8)
+            .frame(width: 150)
+        }
     }
 } 
