@@ -43,8 +43,9 @@ class SettingsModel: ObservableObject {
     @Published var apiKey: String = ""
     @Published var selectedModel: WhisperModel = .whisper1
     @Published var hotkeyEnabled: Bool = true
-    @Published var hotkeyModifiers: String = "⌘⇧" // Command + Shift
-    @Published var hotkeyKey: String = "D"
+    @Published var hotkeyModifiers: UInt = 0 // Raw modifier flags
+    @Published var hotkeyKey: UInt16 = 0 // Raw key code
+    @Published var hotkeyDisplay: String = "⌘⇧D" // Stored property for UI display
     @Published var autoTranscribe: Bool = true
     @Published var showInMenuBar: Bool = false
     @Published var launchAtLogin: Bool = false
@@ -66,8 +67,9 @@ class SettingsModel: ObservableObject {
         // Load other settings from UserDefaults
         selectedModel = WhisperModel(rawValue: UserDefaults.standard.string(forKey: "selectedModel") ?? WhisperModel.whisper1.rawValue) ?? .whisper1
         hotkeyEnabled = UserDefaults.standard.bool(forKey: "hotkeyEnabled")
-        hotkeyModifiers = UserDefaults.standard.string(forKey: "hotkeyModifiers") ?? "⌘⇧"
-        hotkeyKey = UserDefaults.standard.string(forKey: "hotkeyKey") ?? "D"
+        hotkeyModifiers = UInt(UserDefaults.standard.integer(forKey: "hotkeyModifiers"))
+        hotkeyKey = UInt16(UserDefaults.standard.integer(forKey: "hotkeyKey"))
+        hotkeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "⌘⇧D"
         autoTranscribe = UserDefaults.standard.bool(forKey: "autoTranscribe")
         showInMenuBar = UserDefaults.standard.bool(forKey: "showInMenuBar")
         launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
@@ -82,8 +84,9 @@ class SettingsModel: ObservableObject {
         // Save other settings to UserDefaults
         UserDefaults.standard.set(selectedModel.rawValue, forKey: "selectedModel")
         UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled")
-        UserDefaults.standard.set(hotkeyModifiers, forKey: "hotkeyModifiers")
-        UserDefaults.standard.set(hotkeyKey, forKey: "hotkeyKey")
+        UserDefaults.standard.set(Int(hotkeyModifiers), forKey: "hotkeyModifiers")
+        UserDefaults.standard.set(Int(hotkeyKey), forKey: "hotkeyKey")
+        UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
         UserDefaults.standard.set(autoTranscribe, forKey: "autoTranscribe")
         UserDefaults.standard.set(showInMenuBar, forKey: "showInMenuBar")
         UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
@@ -97,9 +100,7 @@ class SettingsModel: ObservableObject {
         return !apiKey.isEmpty
     }
     
-    var hotkeyDisplay: String {
-        return "\(hotkeyModifiers)\(hotkeyKey)"
-    }
+
     
     func loadApiKey() {
         apiKey = keychainService.loadApiKey() ?? ""

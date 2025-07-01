@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon
+import CoreGraphics
 
 struct SettingsView: View {
     @ObservedObject var appState: AppStateModel
@@ -22,544 +23,402 @@ struct SettingsView: View {
     }
     
     var body: some View {
-        NavigationView {
-            // Sidebar
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Settings")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 10)
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(SettingsTab.allCases, id: \.self) { tab in
-                        SettingsTabButton(
-                            tab: tab,
-                            isSelected: selectedTab == tab,
-                            action: { selectedTab = tab }
-                        )
-                    }
+        ZStack {
+            // Premium background matching main app
+            GeometryReader { geometry in
+                ZStack {
+                    // Base gradient background
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
+                            Color(red: 0.8, green: 0.6, blue: 0.4).opacity(0.3),
+                            Color(red: 0.5, green: 0.8, blue: 0.6).opacity(0.3)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    // Overlay blur effect
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.8)
                 }
-                .padding(.vertical, 8)
-                
-                Spacer()
-                
-                // Version info
-                VStack(alignment: .leading, spacing: 4) {
-                    Divider()
-                    HStack {
-                        Text("WolfWhisper")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("v1.4.0")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                }
+                .ignoresSafeArea()
             }
-            .frame(width: 200)
-            .background(Color.gray.opacity(0.05))
             
-            // Content
-            Group {
-                switch selectedTab {
-                case .general:
-                    GeneralSettingsView(settings: appState.settings)
-                case .audio:
-                    AudioSettingsView(settings: appState.settings)
-                case .hotkeys:
-                    HotkeySettingsView(settings: appState.settings)
-                case .advanced:
-                    AdvancedSettingsView(settings: appState.settings)
+            NavigationSplitView {
+                // Modern Sidebar
+                ModernSidebar(
+                    selectedTab: $selectedTab,
+                    onTabChange: { tab in selectedTab = tab }
+                )
+                .frame(width: 220)
+                .navigationSplitViewColumnWidth(220)
+            } detail: {
+                // Modern Content
+                ZStack {
+                    // Content background
+                    Rectangle()
+                        .fill(.thinMaterial)
+                        .ignoresSafeArea()
+                    
+                    Group {
+                        switch selectedTab {
+                        case .general:
+                            ModernGeneralSettingsView(settings: appState.settings)
+                        case .audio:
+                            ModernAudioSettingsView(settings: appState.settings)
+                        case .hotkeys:
+                            ModernHotkeySettingsView(settings: appState.settings)
+                        case .advanced:
+                            ModernAdvancedSettingsView(settings: appState.settings)
+                        }
+                    }
+                    .frame(minWidth: 500, minHeight: 400)
                 }
-            }
-            .frame(minWidth: 500, minHeight: 400)
-        }
-        .navigationTitle("Settings")
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    appState.showSettings = false
-                }
-                .keyboardShortcut(.defaultAction)
             }
         }
     }
 }
 
-struct SettingsTabButton: View {
-    let tab: SettingsView.SettingsTab
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: tab.icon)
-                    .frame(width: 16)
-                    .foregroundColor(isSelected ? .blue : .secondary)
-                
-                Text(tab.rawValue)
-                    .font(.system(.body, weight: isSelected ? .medium : .regular))
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
 
-struct GeneralSettingsView: View {
+
+struct ModernGeneralSettingsView: View {
     @ObservedObject var settings: SettingsModel
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                SettingsSection(title: "API Configuration") {
+            VStack(alignment: .leading, spacing: 20) {
+                ModernSettingsSection(title: "API Configuration") {
                     VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("OpenAI API Key")
-                                .font(.headline)
+                        ModernSettingsField(
+                            title: "OpenAI API Key",
+                            description: "Your API key is stored securely in the Keychain"
+                        ) {
                             SecureField("sk-...", text: $settings.apiKey)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .textFieldStyle(ModernTextFieldStyle())
                                 .font(.system(.body, design: .monospaced))
-                            Text("Your API key is stored securely in the Keychain")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                         }
                         
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Whisper Model")
-                                .font(.headline)
+                        ModernSettingsField(
+                            title: "Whisper Model",
+                            description: settings.selectedModel.description
+                        ) {
                             Picker("Model", selection: $settings.selectedModel) {
                                 ForEach(WhisperModel.allCases, id: \.self) { model in
                                     Text(model.displayName).tag(model)
                                 }
                             }
                             .pickerStyle(MenuPickerStyle())
-                            Text(settings.selectedModel.description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            .tint(.primary)
                         }
                     }
                 }
                 
-                SettingsSection(title: "Behavior") {
+                ModernSettingsSection(title: "Behavior") {
                     VStack(alignment: .leading, spacing: 16) {
-                        Toggle("Auto-transcribe after recording", isOn: $settings.autoTranscribe)
+                        ModernToggle(
+                            title: "Auto-transcribe after recording",
+                            isOn: $settings.autoTranscribe
+                        )
                         
-                        Toggle("Show in menu bar", isOn: $settings.showInMenuBar)
+                        ModernToggle(
+                            title: "Show in menu bar",
+                            isOn: $settings.showInMenuBar
+                        )
                         
-                        Toggle("Launch at login", isOn: $settings.launchAtLogin)
+                        ModernToggle(
+                            title: "Launch at login",
+                            isOn: $settings.launchAtLogin
+                        )
                     }
                 }
             }
-            .padding(24)
+            .padding(20)
         }
-        .navigationTitle("General")
-        .onChange(of: settings.apiKey) { _ in settings.saveSettings() }
-        .onChange(of: settings.selectedModel) { _ in settings.saveSettings() }
-        .onChange(of: settings.autoTranscribe) { _ in settings.saveSettings() }
-        .onChange(of: settings.showInMenuBar) { _ in settings.saveSettings() }
-        .onChange(of: settings.launchAtLogin) { _ in settings.saveSettings() }
+
+        .onChange(of: settings.apiKey) { _, _ in settings.saveSettings() }
+        .onChange(of: settings.selectedModel) { _, _ in settings.saveSettings() }
+        .onChange(of: settings.autoTranscribe) { _, _ in settings.saveSettings() }
+        .onChange(of: settings.showInMenuBar) { _, _ in settings.saveSettings() }
+        .onChange(of: settings.launchAtLogin) { _, _ in settings.saveSettings() }
     }
 }
 
-struct AudioSettingsView: View {
-    @ObservedObject var settings: SettingsModel
-    @State private var inputDevices: [AudioDevice] = []
-    @State private var selectedInputDevice: AudioDevice?
+struct ModernSettingsField<Content: View>: View {
+    let title: String
+    let description: String?
+    let content: Content
     
-    struct AudioDevice: Identifiable, Hashable {
-        let id: String
-        let name: String
-        let isDefault: Bool
-        
-        static let systemDefault = AudioDevice(id: "system_default", name: "System Default", isDefault: true)
+    init(title: String, description: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.description = description
+        self.content = content()
     }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                SettingsSection(title: "Input Settings") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Microphone")
-                                .font(.headline)
-                            Picker("Input Device", selection: $selectedInputDevice) {
-                                Text("System Default").tag(AudioDevice.systemDefault as AudioDevice?)
-                                if !inputDevices.isEmpty {
-                                    Divider()
-                                    ForEach(inputDevices.filter { !$0.isDefault }) { device in
-                                        Text(device.name).tag(device as AudioDevice?)
-                                    }
-                                }
-                            }
-                            .pickerStyle(MenuPickerStyle())
-                            
-                            if selectedInputDevice?.isDefault == true {
-                                Text("Uses the microphone selected in System Preferences → Sound → Input")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Input Level")
-                                .font(.headline)
-                            // TODO: Add audio level meter
-                            Text("Audio level meter will be displayed here")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                SettingsSection(title: "Recording Quality") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Sample Rate")
-                                .font(.headline)
-                            Picker("Sample Rate", selection: .constant("44.1 kHz")) {
-                                Text("44.1 kHz (Recommended)").tag("44.1 kHz")
-                                Text("48 kHz").tag("48 kHz")
-                            }
-                            .pickerStyle(MenuPickerStyle())
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Format")
-                                .font(.headline)
-                            Picker("Format", selection: .constant("M4A")) {
-                                Text("M4A (Recommended)").tag("M4A")
-                                Text("WAV").tag("WAV")
-                            }
-                            .pickerStyle(MenuPickerStyle())
-                        }
-                    }
-                }
-            }
-            .padding(24)
-        }
-        .navigationTitle("Audio")
-        .onAppear {
-            loadAudioDevices()
-            // Set system default if no device is selected
-            if selectedInputDevice == nil {
-                selectedInputDevice = AudioDevice.systemDefault
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+            
+            content
+            
+            if let description = description {
+                Text(description)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.secondary)
             }
         }
-        .onChange(of: selectedInputDevice) { _ in
-            // Save the selected device (for now we'll just use system default)
-            settings.saveSettings()
-        }
-    }
-    
-    private func loadAudioDevices() {
-        // Load actual audio input devices (simplified for now)
-        inputDevices = [
-            AudioDevice(id: "builtin", name: "Built-in Microphone", isDefault: false),
-            AudioDevice(id: "external", name: "External Microphone", isDefault: false)
-        ]
-        // Always default to system default
-        selectedInputDevice = AudioDevice.systemDefault
     }
 }
 
-struct HotkeySettingsView: View {
+struct ModernToggle: View {
+    let title: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+        }
+    }
+}
+
+struct ModernTextFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.white.opacity(0.3), lineWidth: 1)
+            )
+    }
+}
+
+struct ModernAudioSettingsView: View {
     @ObservedObject var settings: SettingsModel
-    @State private var isRecordingHotkey = false
-    @State private var presetHotkeys = [
-        ("⌘⇧D", "Command + Shift + D"),
-        ("⌘⇧V", "Command + Shift + V"),
-        ("⌘⇧T", "Command + Shift + T"),
-        ("⌘⇧R", "Command + Shift + R"),
-        ("⌃⇧Space", "Control + Shift + Space"),
-        ("⌥⇧D", "Option + Shift + D")
-    ]
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                SettingsSection(title: "Global Hotkey") {
+            VStack(alignment: .leading, spacing: 20) {
+                ModernSettingsSection(title: "Input Settings") {
                     VStack(alignment: .leading, spacing: 16) {
-                        Toggle("Enable global hotkey", isOn: $settings.hotkeyEnabled)
-                        
-                        if settings.hotkeyEnabled {
-                                                    VStack(alignment: .leading, spacing: 8) {
-                            Text("Hotkey Combination")
-                                .font(.headline)
-                            
-                            Text("Current: \(settings.hotkeyDisplay)")
-                                .font(.system(.body, design: .monospaced))
+                        ModernSettingsField(
+                            title: "Microphone",
+                            description: "Uses the microphone selected in System Preferences → Sound → Input"
+                        ) {
+                            Text("System Default")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(6)
-                            
-                            Text("Choose a preset:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 8)
-                            
-                            LazyVGrid(columns: [
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ], spacing: 8) {
-                                ForEach(Array(presetHotkeys.enumerated()), id: \.offset) { index, preset in
-                                    Button(action: {
-                                        setHotkey(preset.0)
-                                    }) {
-                                        VStack(spacing: 4) {
-                                            Text(preset.0)
-                                                .font(.system(.title3, design: .monospaced))
-                                                .fontWeight(.medium)
-                                            Text(preset.1)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .padding(.horizontal, 8)
-                                        .background(settings.hotkeyDisplay == preset.0 ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
-                                        .cornerRadius(8)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(settings.hotkeyDisplay == preset.0 ? Color.blue : Color.clear, lineWidth: 2)
-                                        )
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            
-                            Text("Or record your own:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 16)
-                            
-                            Button(action: {
-                                isRecordingHotkey.toggle()
-                            }) {
-                                HStack {
-                                    Image(systemName: isRecordingHotkey ? "stop.circle" : "record.circle")
-                                        .foregroundColor(isRecordingHotkey ? .red : .blue)
-                                    
-                                    if isRecordingHotkey {
-                                        Text("Press your desired key combination...")
-                                            .foregroundColor(.blue)
-                                    } else {
-                                        Text("Record Custom Hotkey")
-                                    }
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                                .background(isRecordingHotkey ? Color.red.opacity(0.1) : Color.blue.opacity(0.1))
-                                .cornerRadius(8)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .stroke(isRecordingHotkey ? Color.red : Color.blue, lineWidth: 2)
+                                        .stroke(.white.opacity(0.3), lineWidth: 1)
                                 )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .onKeyPress { keyPress in
-                                if isRecordingHotkey {
-                                    recordKeyPress(keyPress)
-                                    return .handled
-                                }
-                                return .ignored
-                            }
+                        }
+                    }
+                }
+                
+                ModernSettingsSection(title: "Recording Quality") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ModernSettingsField(
+                            title: "Sample Rate"
+                        ) {
+                            Text("44.1 kHz (Recommended)")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(.white.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        
+                        ModernSettingsField(
+                            title: "Format"
+                        ) {
+                            Text("M4A (Recommended)")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(.white.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+            }
+            .padding(20)
+        }
+
+    }
+}
+
+struct ModernHotkeySettingsView: View {
+    @ObservedObject var settings: SettingsModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                ModernSettingsSection(title: "Global Hotkey") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ModernToggle(
+                            title: "Enable global hotkey",
+                            isOn: $settings.hotkeyEnabled
+                        )
+                        
+                        if settings.hotkeyEnabled {
+                            ModernSettingsField(
+                                title: "Current Hotkey",
+                                description: "Click Record to set a new hotkey combination"
+                            ) {
+                                HotkeyRecorderField(
+                                    hotkeyDisplay: $settings.hotkeyDisplay,
+                                    hotkeyModifiers: $settings.hotkeyModifiers,
+                                    hotkeyKey: $settings.hotkeyKey
+                                )
+                                .frame(width: 220, height: 40)
                             }
                         }
                     }
                 }
                 
-                SettingsSection(title: "Hotkey Behavior") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Action")
-                                .font(.headline)
-                            Picker("Action", selection: .constant("dictate")) {
-                                Text("Start/Stop Dictation").tag("dictate")
-                                Text("Push-to-Talk").tag("ptt")
+                if settings.hotkeyEnabled {
+                    ModernSettingsSection(title: "Hotkey Behavior") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            ModernSettingsField(
+                                title: "After Transcription",
+                                description: "What happens when transcription is complete"
+                            ) {
+                                Text("Copy to clipboard and paste")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                                    )
                             }
-                            .pickerStyle(MenuPickerStyle())
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("After Transcription")
-                                .font(.headline)
-                            Picker("After Transcription", selection: .constant("paste")) {
-                                Text("Copy to clipboard and paste").tag("paste")
-                                Text("Copy to clipboard only").tag("copy")
-                                Text("Show in app").tag("show")
-                            }
-                            .pickerStyle(MenuPickerStyle())
                         }
                     }
                 }
             }
-            .padding(24)
+            .padding(20)
         }
-        .navigationTitle("Hotkeys")
-        .onChange(of: settings.hotkeyEnabled) { _ in settings.saveSettings() }
-    }
-    
-    private func setHotkey(_ hotkeyString: String) {
-        let (modifiers, key) = parseHotkeyString(hotkeyString)
-        settings.hotkeyModifiers = modifiers
-        settings.hotkeyKey = key
-        settings.saveSettings()
-    }
-    
-    private func parseHotkeyString(_ hotkeyString: String) -> (String, String) {
-        var modifiers = ""
-        
-        // Parse modifiers
-        if hotkeyString.contains("⌘") {
-            modifiers += "⌘"
-        }
-        if hotkeyString.contains("⌃") {
-            modifiers += "⌃"
-        }
-        if hotkeyString.contains("⌥") {
-            modifiers += "⌥"
-        }
-        if hotkeyString.contains("⇧") {
-            modifiers += "⇧"
-        }
-        
-        // Parse key
-        let keyChar = hotkeyString.replacingOccurrences(of: "⌘", with: "")
-            .replacingOccurrences(of: "⌃", with: "")
-            .replacingOccurrences(of: "⌥", with: "")
-            .replacingOccurrences(of: "⇧", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        
-        let key = keyChar.uppercased()
-        
-        return (modifiers, key)
-    }
-    
-    private func recordKeyPress(_ keyPress: KeyPress) {
-        var modifiers = ""
-        var key = ""
-        
-        // Capture modifiers
-        if keyPress.modifiers.contains(.command) {
-            modifiers += "⌘"
-        }
-        if keyPress.modifiers.contains(.control) {
-            modifiers += "⌃"
-        }
-        if keyPress.modifiers.contains(.option) {
-            modifiers += "⌥"
-        }
-        if keyPress.modifiers.contains(.shift) {
-            modifiers += "⇧"
-        }
-        
-        // Capture key
-        key = keyPress.key.character.uppercased()
-        
-        // Set the new hotkey
-        let hotkeyString = "\(modifiers)\(key)"
-        setHotkey(hotkeyString)
-        
-        // Stop recording
-        isRecordingHotkey = false
+
+        .onChange(of: settings.hotkeyEnabled) { _, _ in settings.saveSettings() }
     }
 }
 
-struct AdvancedSettingsView: View {
+struct ModernAdvancedSettingsView: View {
     @ObservedObject var settings: SettingsModel
     @State private var showingResetAlert = false
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                SettingsSection(title: "Privacy & Data") {
+            VStack(alignment: .leading, spacing: 20) {
+                ModernSettingsSection(title: "Privacy & Data") {
                     VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Data Handling")
-                                .font(.headline)
-                            Text("Audio recordings are sent to OpenAI for transcription and are not stored locally or by OpenAI beyond the duration of the API call.")
-                                .font(.body)
-                                .foregroundColor(.secondary)
+                        ModernSettingsField(
+                            title: "Data Handling",
+                            description: "Audio recordings are sent to OpenAI for transcription and are not stored locally or by OpenAI beyond the duration of the API call."
+                        ) {
+                            EmptyView()
                         }
                         
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Temporary Files")
-                                .font(.headline)
-                            HStack {
-                                Text("Audio files are temporarily stored in:")
-                                    .font(.body)
-                                Spacer()
-                                Button("Open Folder") {
-                                    // TODO: Open temp folder
-                                }
-                                .font(.caption)
-                            }
+                        ModernSettingsField(
+                            title: "Temporary Files",
+                            description: "Audio files are temporarily stored during processing"
+                        ) {
                             Text(FileManager.default.temporaryDirectory.path)
                                 .font(.system(.caption, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }
                 
-                SettingsSection(title: "Troubleshooting") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Button("Reset All Settings") {
+                ModernSettingsSection(title: "Troubleshooting") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ModernActionButton(
+                            title: "Reset All Settings",
+                            style: .destructive
+                        ) {
                             showingResetAlert = true
                         }
-                        .foregroundColor(.red)
                         
-                        Button("Export Debug Log") {
+                        ModernActionButton(
+                            title: "Export Debug Log",
+                            style: .secondary
+                        ) {
                             // TODO: Export debug information
                         }
                         
-                        Button("Check Permissions") {
+                        ModernActionButton(
+                            title: "Check Permissions",
+                            style: .secondary
+                        ) {
                             // TODO: Re-check all permissions
                         }
                     }
                 }
                 
-                SettingsSection(title: "About") {
+                ModernSettingsSection(title: "About") {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Version:")
+                                .font(.system(size: 16, weight: .medium))
                             Spacer()
                             Text("1.4.0")
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(.secondary)
                         }
                         
                         HStack {
                             Text("Build:")
+                                .font(.system(size: 16, weight: .medium))
                             Spacer()
                             Text("2024.01")
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(.secondary)
                         }
                         
-                        Link("View on GitHub", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper")!)
+                        Divider()
+                            .background(.white.opacity(0.2))
                         
-                        Link("Report Issue", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper/issues")!)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Link("View on GitHub", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper")!)
+                                .font(.system(size: 16, weight: .medium))
+                            
+                            Link("Report Issue", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper/issues")!)
+                                .font(.system(size: 16, weight: .medium))
+                        }
                     }
                 }
             }
-            .padding(24)
+            .padding(20)
         }
-        .navigationTitle("Advanced")
+
         .alert("Reset Settings", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
@@ -577,6 +436,7 @@ struct AdvancedSettingsView: View {
         defaults.removeObject(forKey: "hotkeyEnabled")
         defaults.removeObject(forKey: "hotkeyModifiers")
         defaults.removeObject(forKey: "hotkeyKey")
+        defaults.removeObject(forKey: "hotkeyDisplay")
         defaults.removeObject(forKey: "autoTranscribe")
         defaults.removeObject(forKey: "showInMenuBar")
         defaults.removeObject(forKey: "launchAtLogin")
@@ -590,7 +450,50 @@ struct AdvancedSettingsView: View {
     }
 }
 
-struct SettingsSection<Content: View>: View {
+struct ModernActionButton: View {
+    let title: String
+    let style: ButtonStyle
+    let action: () -> Void
+    
+    enum ButtonStyle {
+        case primary, secondary, destructive
+        
+        var foregroundColor: Color {
+            switch self {
+            case .primary: return .white
+            case .secondary: return .primary
+            case .destructive: return .red
+            }
+        }
+        
+        var backgroundColor: Color {
+            switch self {
+            case .primary: return .blue
+            case .secondary: return .clear
+            case .destructive: return .clear
+            }
+        }
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(style.foregroundColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(style.backgroundColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(style.foregroundColor.opacity(0.2), lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct ModernSettingsSection<Content: View>: View {
     let title: String
     let content: Content
     
@@ -600,15 +503,137 @@ struct SettingsSection<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(title)
-                .font(.title3)
-                .fontWeight(.semibold)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
             
             content
         }
-        .padding()
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(12)
+        .padding(20)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
     }
-} 
+}
+
+struct ModernSidebar: View {
+    @Binding var selectedTab: SettingsView.SettingsTab
+    let onTabChange: (SettingsView.SettingsTab) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    // Wolf icon
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 36, height: 36)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 1)
+                        
+                        Image(systemName: "pawprint.circle.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.white)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    
+                    Text("Settings")
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+            }
+            
+            // Navigation tabs
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(SettingsView.SettingsTab.allCases, id: \.self) { tab in
+                    ModernSidebarTab(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        action: { 
+                            selectedTab = tab
+                            onTabChange(tab)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 20)
+            
+            Spacer()
+            
+            // Version info in modern style
+            VStack(alignment: .leading, spacing: 8) {
+                Rectangle()
+                    .fill(.white.opacity(0.1))
+                    .frame(height: 1)
+                    .padding(.horizontal, 20)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("WolfWhisper")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Text("Version 1.4.0")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+        .background(.ultraThinMaterial)
+    }
+}
+
+struct ModernSidebarTab: View {
+    let tab: SettingsView.SettingsTab
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(isSelected ? .blue : .secondary)
+                    .frame(width: 20)
+                
+                Text(tab.rawValue)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(isSelected ? .blue : .primary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(.blue.opacity(0.15))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.blue.opacity(0.3), lineWidth: 1)
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.clear)
+                    }
+                }
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .focusable(false)
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+
+

@@ -15,13 +15,13 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // Removed Atomics package
+        // No external dependencies - using native macOS APIs
     ],
     targets: [
         .executableTarget(
             name: "WolfWhisper",
             dependencies: [
-                // Removed Atomics product
+                // No external dependencies
             ],
             path: "WolfWhisper",
             exclude: ["Info.plist"],

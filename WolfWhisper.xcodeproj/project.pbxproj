@@ -3,13 +3,14 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E288A012473F7F722F7063 /* KeychainService.swift */; };
 		0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */; };
 		3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB11 /* HotkeyService.swift */; };
+		3E4804C699DC392A038E0C1F /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */; };
 		4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E868304B1233FA19B9C104 /* ContentView.swift */; };
 		4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */; };
 		4EEB6190A1F561844F6A9337 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC1FF827BE7386A262504F /* SettingsView.swift */; };
@@ -25,6 +26,7 @@
 		042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingRecordingView.swift; sourceTree = "<group>"; };
 		07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		498948B290C8A7419E2BEB11 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
+		498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderField.swift; sourceTree = "<group>"; };
 		63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WolfWhisperApp.swift; sourceTree = "<group>"; };
 		908A50274BE4BBC01EC555BB /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
@@ -56,6 +58,7 @@
 				A9E868304B1233FA19B9C104 /* ContentView.swift */,
 				042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */,
 				498948B290C8A7419E2BEB11 /* HotkeyService.swift */,
+				498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */,
 				CE0BCEC3CE08393FEA8781B8 /* Info.plist */,
 				B9E288A012473F7F722F7063 /* KeychainService.swift */,
 				07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */,
@@ -104,8 +107,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = C2C02DBB294DD2E0ADF109E2 /* Build configuration list for PBXProject "WolfWhisper" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -117,7 +118,8 @@
 			);
 			mainGroup = F81AA55E7989BF13CEFDB151;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 54;
+			packageReferences = (
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -147,6 +149,7 @@
 				4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */,
 				7C824CA662371B0E92CE7772 /* FloatingRecordingView.swift in Sources */,
 				3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */,
+				3E4804C699DC392A038E0C1F /* HotkeyRecorderField.swift in Sources */,
 				065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */,
 				0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */,
 				4EEB6190A1F561844F6A9337 /* SettingsView.swift in Sources */,
@@ -336,6 +339,8 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+
 	};
 	rootObject = FA52D495A285247D479A3A88 /* Project object */;
 }

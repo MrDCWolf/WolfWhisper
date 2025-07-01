@@ -162,221 +162,100 @@ struct MainAppView: View {
     @ObservedObject var appState: AppStateModel
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Modern background with subtle gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(NSColor.windowBackgroundColor),
-                        Color(NSColor.windowBackgroundColor).opacity(0.8)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        ZStack {
+            // Premium background with gradient and blur effects
+            GeometryReader { geometry in
+                ZStack {
+                    // Base gradient background
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
+                            Color(red: 0.8, green: 0.6, blue: 0.4).opacity(0.3),
+                            Color(red: 0.5, green: 0.8, blue: 0.6).opacity(0.3)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    // Overlay blur effect
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.8)
+                }
                 .ignoresSafeArea()
+            }
+            
+            VStack(spacing: 20) {
+                // Modern Header with Wolf Logo
+                ModernHeaderView(appState: appState)
                 
-                VStack(spacing: adaptiveSpacing(for: geometry.size)) {
-                    // Header
-                    HeaderView(appState: appState)
-                    
-                    VStack(spacing: adaptiveContentSpacing(for: geometry.size)) {
-                        // Main recording button - properly sized
-                        RecordingButton(
-                            state: appState.currentState,
-                            isRecording: appState.currentState == .recording,
-                            audioLevels: appState.audioLevels,
-                            action: {
-                                handleRecordingButtonTap(appState: appState)
-                            }
-                        )
-                        
-                        // Status text
-                        Text(appState.statusText)
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .animation(.easeInOut, value: appState.statusText)
-                        
-                        // Debug info - only show meaningful information
-                        if !appState.debugInfo.isEmpty && 
-                           !appState.debugInfo.contains("No transcription yet") &&
-                           !appState.debugInfo.contains("Debug: No transcription yet") {
-                            Text(appState.debugInfo)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                .animation(.easeInOut, value: appState.debugInfo)
+                // Central Recording Interface
+                VStack(spacing: 12) {
+                    // Glass-style Recording Button
+                    ModernRecordingButton(
+                        state: appState.currentState,
+                        isRecording: appState.currentState == .recording,
+                        audioLevels: appState.audioLevels,
+                        action: {
+                            handleRecordingButtonTap(appState: appState)
                         }
-                    }
+                    )
                     
-                    // Transcribed text - modern card design
-                    TranscribedTextCard(text: appState.transcribedText)
-                    
-                    Spacer(minLength: 0)
-                    
-                    // Footer with hotkey info
-                    FooterView(appState: appState)
+                    // Status text with modern styling
+                    Text(appState.statusText)
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .transition(.opacity.combined(with: .scale))
+                        .animation(.easeInOut(duration: 0.3), value: appState.statusText)
                 }
-                .padding(.top, adaptiveTopPadding(for: geometry.size))
-                .padding(.horizontal, adaptiveHorizontalPadding(for: geometry.size))
-                .padding(.bottom, adaptiveBottomPadding(for: geometry.size))
+                
+                // Modern Transcription Panel
+                ModernTranscriptionPanel(text: appState.transcribedText)
+                
+                // Sleek Footer with Hotkey
+                ModernFooterView(appState: appState)
             }
+            .padding(.top, 15)
+            .padding(.horizontal, 25)
+            .padding(.bottom, 15)
         }
-        .frame(minWidth: 400, maxWidth: 600, minHeight: 500, maxHeight: 700)
+        .frame(minWidth: 450, maxWidth: 600, minHeight: 500, maxHeight: 650)
     }
     
-    // Adaptive spacing functions for responsiveness
-    private func adaptiveSpacing(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 24 : 16
-    }
-    
-    private func adaptiveContentSpacing(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 20 : 12
-    }
-    
-    private func adaptiveTopPadding(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 20 : 15
-    }
-    
-    private func adaptiveHorizontalPadding(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 30 : 20
-    }
-    
-    private func adaptiveBottomPadding(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 20 : 15
-    }
+
 }
 
-struct HeaderView: View {
+struct ModernHeaderView: View {
     @ObservedObject var appState: AppStateModel
     
     var body: some View {
-        GeometryReader { geometry in
-            HStack {
-                // App title and logo with adaptive sizing
-                HStack(spacing: adaptiveLogoSpacing(for: geometry.size)) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: adaptiveLogoSize(for: geometry.size), weight: .medium))
-                        .foregroundColor(.blue)
-                    
-                    Text("WolfWhisper")
-                        .font(.system(size: adaptiveTitleSize(for: geometry.size), weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                }
+        HStack(alignment: .center, spacing: 16) {
+            // Modern Wolf Logo
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 50, height: 50)
+                    .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
                 
-                Spacer(minLength: 20) // Ensure minimum space between title and settings
-                
-                // Settings button - always visible with adaptive sizing
-                Button(action: {
-                    appState.showSettings = true
-                }) {
-                    Image(systemName: "gear")
-                        .font(.system(size: adaptiveSettingsIconSize(for: geometry.size), weight: .medium))
-                        .foregroundColor(.white)
-                        .frame(width: adaptiveSettingsButtonSize(for: geometry.size), 
-                               height: adaptiveSettingsButtonSize(for: geometry.size))
-                        .background(
-                            Circle()
-                                .fill(.blue)
-                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Settings")
-                .animation(.easeInOut(duration: 0.2), value: appState.showSettings)
+                Image(systemName: "pawprint.circle.fill")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.hierarchical)
             }
-            .padding(.horizontal, adaptiveHeaderPadding(for: geometry.size))
-            .padding(.top, adaptiveHeaderTopPadding(for: geometry.size))
+            
+            // App Title with Modern Typography
+            Text("WolfWhisper")
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+            
+            Spacer()
         }
-        .frame(height: 60) // Fixed height to ensure consistent layout
-    }
-    
-    private func adaptiveLogoSpacing(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 12 : 8
-    }
-    
-    private func adaptiveLogoSize(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 20 : 18
-    }
-    
-    private func adaptiveTitleSize(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 20 : 18
-    }
-    
-    private func adaptiveSettingsIconSize(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 18 : 16
-    }
-    
-    private func adaptiveSettingsButtonSize(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 40 : 36
-    }
-    
-    private func adaptiveHeaderPadding(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 8 : 4
-    }
-    
-    private func adaptiveHeaderTopPadding(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 8 : 4
+        .padding(.horizontal, 4)
     }
 }
 
-struct FooterView: View {
-    @ObservedObject var appState: AppStateModel
-    
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: adaptiveFooterSpacing(for: geometry.size)) {
-                if appState.settings.hotkeyEnabled {
-                    HStack(spacing: adaptiveHotkeySpacing(for: geometry.size)) {
-                        Text("Global Hotkey:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(appState.settings.hotkeyDisplay)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, adaptiveHotkeyPadding(for: geometry.size))
-                            .padding(.vertical, 5)
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(.primary.opacity(0.2), lineWidth: 0.5)
-                            )
-                    }
-                    
-                    Text("Press the hotkey from any app to start dictation")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, adaptiveFooterHorizontalPadding(for: geometry.size))
-        }
-        .frame(height: appState.settings.hotkeyEnabled ? 60 : 0)
-    }
-    
-    private func adaptiveFooterSpacing(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 12 : 8
-    }
-    
-    private func adaptiveHotkeySpacing(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 12 : 8
-    }
-    
-    private func adaptiveHotkeyPadding(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 10 : 8
-    }
-    
-    private func adaptiveFooterHorizontalPadding(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 20 : 16
-    }
-}
+
 
 // Helper function to handle recording button tap
 @MainActor
@@ -433,74 +312,259 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
     }
 }
 
-// Modern transcribed text card component
-struct TranscribedTextCard: View {
-    let text: String
+
+
+struct ModernRecordingButton: View {
+    let state: AppState
+    let isRecording: Bool
+    let audioLevels: [Float]
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var glowOpacity: Double = 0.0
     
     var body: some View {
-        GeometryReader { geometry in
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Transcribed Text")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    if !text.isEmpty {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                }
+        ZStack {
+            // Outer glow ring for recording state
+            if isRecording {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.red.opacity(0.8),
+                                Color.orange.opacity(0.6),
+                                Color.red.opacity(0.4)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 130, height: 130)
+                    .scaleEffect(pulseScale)
+                    .opacity(glowOpacity)
+                    .blur(radius: 2)
+            }
+            
+            // Main glassmorphic button
+            ZStack {
+                // Glass background
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 100, height: 100)
+                    .overlay(
+                        Circle()
+                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                 
-                // Adaptive content area
-                if text.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "quote.bubble")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundColor(.secondary.opacity(0.5))
-                        
-                        Text("No transcription yet")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                // Content based on state
+                Group {
+                    switch state {
+                    case .idle:
+                        ModernIdleContent()
+                    case .recording:
+                        ModernRecordingContent(audioLevels: audioLevels)
+                    case .transcribing:
+                        ModernTranscribingContent()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, adaptiveEmptyStatePadding(for: geometry.size))
-                } else {
-                    ScrollView {
-                        Text(text)
-                            .font(.body)
-                            .foregroundColor(.primary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
-                    }
-                    .frame(maxHeight: adaptiveTextHeight(for: geometry.size))
                 }
             }
-            .padding(adaptiveCardPadding(for: geometry.size))
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(.primary.opacity(0.1), lineWidth: 1)
-            )
         }
-        .frame(minHeight: 100)
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .onTapGesture {
+            // Add haptic feedback
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            action()
+        }
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        })
+        .onAppear {
+            if isRecording {
+                startRecordingAnimation()
+            }
+        }
+        .onChange(of: isRecording) { _, recording in
+            if recording {
+                startRecordingAnimation()
+            } else {
+                stopRecordingAnimation()
+            }
+        }
     }
     
-    private func adaptiveCardPadding(for size: CGSize) -> CGFloat {
-        return size.width > 500 ? 20 : 16
+    private func startRecordingAnimation() {
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            pulseScale = 1.2
+            glowOpacity = 0.8
+        }
     }
     
-    private func adaptiveEmptyStatePadding(for size: CGSize) -> CGFloat {
-        return size.height > 600 ? 40 : 20
+    private func stopRecordingAnimation() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            pulseScale = 1.0
+            glowOpacity = 0.0
+        }
+    }
+}
+
+struct ModernIdleContent: View {
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: 32, weight: .medium))
+            .foregroundStyle(.white)
+            .symbolRenderingMode(.hierarchical)
+    }
+}
+
+struct ModernRecordingContent: View {
+    let audioLevels: [Float]
+    @State private var waveAnimation: Bool = false
+    
+    var body: some View {
+        ZStack {
+            // Animated waveform background
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .stroke(.white.opacity(0.3), lineWidth: 2)
+                    .frame(width: CGFloat(40 + index * 15), height: CGFloat(40 + index * 15))
+                    .scaleEffect(waveAnimation ? 1.2 : 0.8)
+                    .opacity(waveAnimation ? 0.0 : 0.6)
+                    .animation(
+                        .easeInOut(duration: 1.5)
+                        .repeatForever(autoreverses: false)
+                        .delay(Double(index) * 0.3),
+                        value: waveAnimation
+                    )
+            }
+            
+            Image(systemName: "waveform")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.hierarchical)
+        }
+        .onAppear {
+            waveAnimation = true
+        }
+    }
+}
+
+struct ModernTranscribingContent: View {
+    @State private var rotationAngle: Double = 0
+    
+    var body: some View {
+        ZStack {
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.hierarchical)
+                .rotationEffect(.degrees(rotationAngle))
+                .onAppear {
+                    withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                        rotationAngle = 360
+                    }
+                }
+        }
+    }
+}
+
+struct ModernTranscriptionPanel: View {
+    let text: String
+    @State private var animateText = false
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .fill(.thinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+            .overlay(
+                Group {
+                    if text.isEmpty {
+                        // Empty state with elegant placeholder
+                        VStack(spacing: 16) {
+                            Image(systemName: "quote.bubble")
+                                .font(.system(size: 32, weight: .light))
+                                .foregroundStyle(.secondary)
+                                .symbolRenderingMode(.hierarchical)
+                            
+                            Text("No transcription yet")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .transition(.opacity.combined(with: .scale))
+                    } else {
+                        // Transcribed text with typing animation
+                        ScrollView {
+                            Text(text)
+                                .font(.system(size: 16, weight: .regular, design: .rounded))
+                                .foregroundStyle(.primary)
+                                .lineSpacing(4)
+                                .padding(20)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
+                        .animation(.easeInOut(duration: 0.5), value: text)
+                    }
+                }
+            )
+            .frame(height: 150)
+            .animation(.easeInOut(duration: 0.3), value: text.isEmpty)
+    }
+}
+
+struct ModernFooterView: View {
+    @ObservedObject var appState: AppStateModel
+    
+    var body: some View {
+        if appState.settings.hotkeyEnabled {
+            HStack(spacing: 12) {
+                // Hotkey label with icon
+                Label("Global Hotkey:", systemImage: "keyboard")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                
+                // Modern hotkey display
+                Text(formatHotkeyDisplay(appState.settings.hotkeyDisplay))
+                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.thinMaterial, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
+            .transition(.opacity.combined(with: .scale))
+        }
     }
     
-    private func adaptiveTextHeight(for size: CGSize) -> CGFloat {
-        return max(60, size.height * 0.2) // At least 60px, or 20% of window height
+    private func formatHotkeyDisplay(_ display: String) -> String {
+        // Convert the display to use proper symbols
+        return display
+            .replacingOccurrences(of: "Cmd", with: "⌘")
+            .replacingOccurrences(of: "Shift", with: "⇧")
+            .replacingOccurrences(of: "Option", with: "⌥")
+            .replacingOccurrences(of: "Control", with: "⌃")
+            .replacingOccurrences(of: "+", with: " ")
     }
 }
 

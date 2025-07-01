@@ -109,61 +109,45 @@ struct RecordingButton: View {
     @State private var pulseScale: CGFloat = 1.0
     
     var body: some View {
-        Button(action: action) {
-            ZStack {
-                // Outer ring with pulse animation
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.blue.opacity(0.3),
-                                Color.blue.opacity(0.1)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
+        ZStack {
+            // Main button circle with enhanced shadow for depth
+            Circle()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: gradientColors),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                    .frame(width: 100, height: 100)
-                    .scaleEffect(pulseScale)
-                    .opacity(isRecording ? 0.6 : 0.3)
-                
-                // Main button circle
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: gradientColors),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(
-                        color: Color.black.opacity(0.1),
-                        radius: 8,
-                        x: 0,
-                        y: 4
-                    )
-                
-                // Content based on state
-                Group {
-                    switch state {
-                    case .idle:
-                        IdleButtonContent()
-                    case .recording:
-                        RecordingButtonContent(audioLevels: audioLevels)
-                    case .transcribing:
-                        TranscribingButtonContent()
-                    }
+                )
+                .frame(width: 80, height: 80)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(
+                    color: Color.black.opacity(0.15),
+                    radius: 12,
+                    x: 0,
+                    y: 6
+                )
+                .scaleEffect(pulseScale)
+            
+            // Content based on state
+            Group {
+                switch state {
+                case .idle:
+                    IdleButtonContent()
+                case .recording:
+                    RecordingButtonContent(audioLevels: audioLevels)
+                case .transcribing:
+                    TranscribingButtonContent()
                 }
             }
         }
-        .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
+        .onTapGesture {
+            action()
+        }
         .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing

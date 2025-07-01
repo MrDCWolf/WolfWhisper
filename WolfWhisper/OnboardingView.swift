@@ -501,6 +501,7 @@ struct HotkeySetupView: View {
                                         let parts = parseHotkeyCombo(combo)
                                         appState.settings.hotkeyModifiers = parts.modifiers
                                         appState.settings.hotkeyKey = parts.key
+                                        appState.settings.hotkeyDisplay = combo
                                         stopRecording()
                                     }
                                     .font(.caption)
@@ -551,11 +552,59 @@ struct HotkeySetupView: View {
         isRecordingHotkey = false
     }
     
-    private func parseHotkeyCombo(_ combo: String) -> (modifiers: String, key: String) {
+    private func parseHotkeyCombo(_ combo: String) -> (modifiers: UInt, key: UInt16) {
         // Parse combinations like "⌘⇧D" into modifiers and key
-        let key = String(combo.last ?? "D")
-        let modifiers = String(combo.dropLast())
-        return (modifiers: modifiers, key: key)
+        let keyChar = combo.last ?? "D"
+        let modifierString = String(combo.dropLast())
+        
+        // Convert key character to key code
+        let keyCode: UInt16
+        switch keyChar.uppercased() {
+        case "A": keyCode = 0x00
+        case "B": keyCode = 0x0B
+        case "C": keyCode = 0x08
+        case "D": keyCode = 0x02
+        case "E": keyCode = 0x0E
+        case "F": keyCode = 0x03
+        case "G": keyCode = 0x05
+        case "H": keyCode = 0x04
+        case "I": keyCode = 0x22
+        case "J": keyCode = 0x26
+        case "K": keyCode = 0x28
+        case "L": keyCode = 0x25
+        case "M": keyCode = 0x2E
+        case "N": keyCode = 0x2D
+        case "O": keyCode = 0x1F
+        case "P": keyCode = 0x23
+        case "Q": keyCode = 0x0C
+        case "R": keyCode = 0x0F
+        case "S": keyCode = 0x01
+        case "T": keyCode = 0x11
+        case "U": keyCode = 0x20
+        case "V": keyCode = 0x09
+        case "W": keyCode = 0x0D
+        case "X": keyCode = 0x07
+        case "Y": keyCode = 0x10
+        case "Z": keyCode = 0x06
+        default: keyCode = 0x02 // Default to 'D'
+        }
+        
+        // Convert modifier symbols to flags
+        var modifierFlags: UInt = 0
+        if modifierString.contains("⌘") {
+            modifierFlags |= NSEvent.ModifierFlags.command.rawValue
+        }
+        if modifierString.contains("⇧") {
+            modifierFlags |= NSEvent.ModifierFlags.shift.rawValue
+        }
+        if modifierString.contains("⌥") {
+            modifierFlags |= NSEvent.ModifierFlags.option.rawValue
+        }
+        if modifierString.contains("⌃") {
+            modifierFlags |= NSEvent.ModifierFlags.control.rawValue
+        }
+        
+        return (modifiers: modifierFlags, key: keyCode)
     }
 }
 

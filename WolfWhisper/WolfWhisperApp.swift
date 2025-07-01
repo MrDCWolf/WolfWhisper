@@ -1,7 +1,29 @@
 import SwiftUI
 import AppKit
 
-// Custom window class that doesn't steal focus
+// Custom panel class for chrome-less, non-movable floating window
+class FloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+    
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: [.nonactivatingPanel, .fullSizeContentView], backing: backingStoreType, defer: flag)
+        
+        // Configure panel properties
+        self.level = .floating
+        self.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        self.isOpaque = false
+        self.backgroundColor = NSColor.clear
+        self.hasShadow = true
+        self.isMovable = false
+        
+        // Remove from Dock and App Switcher
+        self.hidesOnDeactivate = false
+        self.worksWhenModal = true
+    }
+}
+
+// Custom window class that doesn't steal focus (for settings window)
 class NonFocusingWindow: NSWindow {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -10,9 +32,7 @@ class NonFocusingWindow: NSWindow {
 @main
 struct WolfWhisperApp: App {
     @StateObject private var appState = AppStateModel()
-    @State private var settingsWindow: NSWindow?
     @State private var floatingRecordingWindow: NSWindow?
-    @State private var settingsWindowDelegate: SettingsWindowDelegate?
     @State private var floatingWindowDelegate: FloatingWindowDelegate?
     
     var body: some Scene {
@@ -24,49 +44,23 @@ struct WolfWhisperApp: App {
             }
         }
         .windowResizability(.contentSize)
-        .onChange(of: appState.showSettings) { _, newValue in
-            if newValue {
-                openSettingsWindow()
-            } else {
-                closeSettingsWindow()
+        .commands {
+            CommandGroup(after: .newItem) {
+                SettingsMenuButton()
             }
         }
-        .onChange(of: appState.currentState) { _, newState in
-            handleStateChange(newState)
-        }
-    }
-    
-    private func openSettingsWindow() {
-        if settingsWindow == nil {
-            let settingsView = SettingsView(appState: appState)
-            let hostingController = NSHostingController(rootView: settingsView)
-            
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            
-            settingsWindow?.title = "Settings"
-            settingsWindow?.contentViewController = hostingController
-            settingsWindow?.center()
-            settingsWindow?.setFrameAutosaveName("SettingsWindow")
-            settingsWindow?.isReleasedWhenClosed = false
-            
-            // Handle window close
-            settingsWindowDelegate = SettingsWindowDelegate(appState: appState)
-            settingsWindow?.delegate = settingsWindowDelegate
-        } else {
-            // Using existing settings window
+        .onChange(of: appState.currentState) { _, newValue in
+            handleStateChange(newValue)
         }
         
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-    
-    private func closeSettingsWindow() {
-        settingsWindow?.close()
+        // Settings window as a separate scene
+        WindowGroup("Settings", id: "settings") {
+            SettingsView(appState: appState)
+                .frame(minWidth: 700, minHeight: 500)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .handlesExternalEvents(matching: Set(arrayLiteral: "settings"))
     }
     
     private func handleStateChange(_ newState: AppState) {
@@ -86,44 +80,67 @@ struct WolfWhisperApp: App {
             let recordingView = FloatingRecordingView(appState: appState)
             let hostingController = NSHostingController(rootView: recordingView)
             
-            floatingRecordingWindow = NonFocusingWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
-                styleMask: [.titled, .closable, .fullSizeContentView],
+            // Create chrome-less floating panel
+            floatingRecordingWindow = FloatingPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 280, height: 280),
+                styleMask: [],
                 backing: .buffered,
                 defer: false
             )
             
-            floatingRecordingWindow?.title = "WolfWhisper Recording"
             floatingRecordingWindow?.contentViewController = hostingController
             floatingRecordingWindow?.center()
-            floatingRecordingWindow?.level = .floating
-            floatingRecordingWindow?.isOpaque = false
-            floatingRecordingWindow?.backgroundColor = NSColor.clear
-            floatingRecordingWindow?.hasShadow = true
             floatingRecordingWindow?.isReleasedWhenClosed = false
             
             // Handle window close
             floatingWindowDelegate = FloatingWindowDelegate(appState: appState)
             floatingRecordingWindow?.delegate = floatingWindowDelegate
+            
+            // Initial scale for appearance animation
+            floatingRecordingWindow?.setFrame(
+                floatingRecordingWindow?.frame.applying(
+                    CGAffineTransform(scaleX: 0.9, y: 0.9)
+                ) ?? NSRect.zero,
+                display: false
+            )
+            floatingRecordingWindow?.alphaValue = 0.0
         }
         
+        // Animate appearance
         floatingRecordingWindow?.orderFront(nil)
+        
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            
+            floatingRecordingWindow?.animator().alphaValue = 1.0
+            floatingRecordingWindow?.animator().setFrame(
+                NSRect(x: floatingRecordingWindow?.frame.origin.x ?? 0,
+                       y: floatingRecordingWindow?.frame.origin.y ?? 0,
+                       width: 280,
+                       height: 280),
+                display: true
+            )
+        }
     }
     
     private func hideFloatingRecordingWindow() {
-        floatingRecordingWindow?.close()
-    }
-}
-
-class SettingsWindowDelegate: NSObject, NSWindowDelegate {
-    let appState: AppStateModel
-    
-    init(appState: AppStateModel) {
-        self.appState = appState
-    }
-    
-    func windowWillClose(_ notification: Notification) {
-        appState.showSettings = false
+        guard let window = floatingRecordingWindow else { return }
+        
+        // Animate dismissal
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            
+            window.animator().alphaValue = 0.0
+            window.animator().setFrame(
+                window.frame.applying(CGAffineTransform(scaleX: 0.9, y: 0.9)),
+                display: true
+            )
+        }) {
+            // Close window after animation completes
+            window.close()
+        }
     }
 }
 
@@ -139,5 +156,17 @@ class FloatingWindowDelegate: NSObject, NSWindowDelegate {
         if appState.currentState == .recording {
             // This will be handled by the ContentView's stopRecording method
         }
+    }
+}
+
+struct SettingsMenuButton: View {
+    @Environment(\.openWindow) private var openWindow
+    
+    var body: some View {
+        Button("Settings...") {
+            print("DEBUG: Settings menu item clicked")
+            openWindow(id: "settings")
+        }
+        .keyboardShortcut(",", modifiers: .command)
     }
 } 

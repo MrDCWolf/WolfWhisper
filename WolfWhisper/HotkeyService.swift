@@ -15,15 +15,16 @@ class HotkeyService: ObservableObject {
     
     private init() {}
     
-    func registerHotkey(modifiers: String, key: String) {
+    func registerHotkey(modifiers: UInt, key: UInt16) {
+        print("🔧 HotkeyService.registerHotkey called with modifiers: \(modifiers), key: \(key)")
+        
         // Unregister existing hotkey first
         unregisterHotkey()
         
-        guard let keyCode = keyCodeForString(key),
-              let carbonModifiers = carbonModifiersForString(modifiers) else {
-            print("Failed to parse hotkey: \(modifiers)\(key)")
-            return
-        }
+        let keyCode = Int(key)
+        let carbonModifiers = carbonModifiersFromFlags(modifiers)
+        
+        print("🔧 Converted to keyCode: \(keyCode), carbonModifiers: \(carbonModifiers)")
         
         // Register the hotkey
         let hotKeyID = EventHotKeyID(signature: fourCharCodeFrom("WLFW"), id: 1)
@@ -40,9 +41,9 @@ class HotkeyService: ObservableObject {
         if status == noErr {
             isRegistered = true
             setupEventHandler()
-            print("Hotkey registered: \(modifiers)\(key)")
+            print("✅ Hotkey registered successfully with modifiers: \(modifiers), key: \(key)")
         } else {
-            print("Failed to register hotkey: \(status)")
+            print("❌ Failed to register hotkey: \(status) (modifiers: \(modifiers), key: \(key))")
         }
     }
     
@@ -71,11 +72,14 @@ class HotkeyService: ObservableObject {
         ]
         
         let callback: EventHandlerProcPtr = { (nextHandler, theEvent, userData) -> OSStatus in
+            print("🔥 Hotkey event received!")
+            
             // Get the HotkeyService instance from userData
             let hotkeyService = Unmanaged<HotkeyService>.fromOpaque(userData!).takeUnretainedValue()
             
             // Trigger the callback on the main thread
             DispatchQueue.main.async {
+                print("🔥 Calling hotkey callback...")
                 hotkeyService.onHotkeyPressed?()
             }
             
@@ -117,23 +121,30 @@ class HotkeyService: ObservableObject {
         return keyMap[key.uppercased()]
     }
     
-    // Convert string modifiers to Carbon modifiers
-    private func carbonModifiersForString(_ modifiers: String) -> Int? {
+    // Convert UInt modifier flags to Carbon modifiers
+    private func carbonModifiersFromFlags(_ flags: UInt) -> Int {
+        print("🔧 Converting modifier flags: \(flags)")
         var carbonModifiers = 0
         
-        if modifiers.contains("⌘") || modifiers.contains("Cmd") {
+        // The flags come from our hotkey recorder which stores Carbon modifier flags
+        if flags & UInt(cmdKey) != 0 {
             carbonModifiers |= cmdKey
+            print("🔧 Added cmdKey")
         }
-        if modifiers.contains("⌥") || modifiers.contains("Alt") || modifiers.contains("Option") {
+        if flags & UInt(optionKey) != 0 {
             carbonModifiers |= optionKey
+            print("🔧 Added optionKey")
         }
-        if modifiers.contains("⌃") || modifiers.contains("Ctrl") || modifiers.contains("Control") {
+        if flags & UInt(controlKey) != 0 {
             carbonModifiers |= controlKey
+            print("🔧 Added controlKey")
         }
-        if modifiers.contains("⇧") || modifiers.contains("Shift") {
+        if flags & UInt(shiftKey) != 0 {
             carbonModifiers |= shiftKey
+            print("🔧 Added shiftKey")
         }
         
+        print("🔧 Final carbonModifiers: \(carbonModifiers)")
         return carbonModifiers
     }
     
