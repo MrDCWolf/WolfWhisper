@@ -1,173 +1,191 @@
 @preconcurrency import AVFoundation
-import AppKit
-import os
+import Foundation
 
 @MainActor
-class AudioService: ObservableObject {
-    private let appState: AppStateModel
-    private let transcriptionService: TranscriptionService
-
+class AudioService: NSObject, ObservableObject {
+    static let shared = AudioService()
+    
     private var audioRecorder: AVAudioRecorder?
-    private var audioFileURL: URL?
-    private var isRecording = false
-
-    init(appState: AppStateModel, transcriptionService: TranscriptionService) {
-        self.appState = appState
-        self.transcriptionService = transcriptionService
+    private var recordingURL: URL?
+    private var levelTimer: Timer?
+    
+    // Callbacks
+    var onStateChange: ((AppState) -> Void)?
+    var onAudioLevelsUpdate: (([Float]) -> Void)?
+    
+    private override init() {
+        super.init()
     }
     
-    @MainActor
-    func startRecording() {
-        guard !isRecording else {
-            print("⚠️ Already recording")
-            return
+    func startRecording() async throws {
+        // Request microphone permission
+        let granted = await AVCaptureDevice.requestAccess(for: .audio)
+        guard granted else {
+            throw AudioError.permissionDenied
         }
         
-        Task {
-            await self.setupAndStartRecording()
-        }
-    }
-
-    @MainActor
-    private func setupAndStartRecording() async {
-        print("🎤 Starting recording setup...")
+        // Create a unique file URL for this recording
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "recording_\(Date().timeIntervalSince1970).m4a"
+        recordingURL = tempDir.appendingPathComponent(fileName)
         
-        // First check microphone permissions
-        let microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        print("🔐 Microphone permission status: \(microphoneStatus.rawValue)")
-        
-        switch microphoneStatus {
-        case .notDetermined:
-            print("🔐 Requesting microphone permission...")
-            let granted = await AVCaptureDevice.requestAccess(for: .audio)
-            if !granted {
-                appState.updateState(to: .idle, message: "Microphone access denied")
-                return
-            }
-            print("✅ Microphone permission granted")
-        case .denied, .restricted:
-            appState.updateState(to: .idle, message: "Microphone access denied. Please enable in System Preferences.")
-            return
-        case .authorized:
-            print("✅ Microphone permission already granted")
-        @unknown default:
-            appState.updateState(to: .idle, message: "Unknown microphone permission status")
-            return
+        guard let url = recordingURL else {
+            throw AudioError.fileCreationFailed
         }
+        
+        // Set up recording settings
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100.0,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
         
         do {
-            // Create temporary file
-            let fileManager = FileManager.default
-            let tempDir = fileManager.temporaryDirectory
-            let filePath = tempDir.appendingPathComponent("wolfwhisper_\(Date().timeIntervalSince1970).m4a")
-            print("📁 Recording to: \(filePath)")
-            
-            // Configure recording settings
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 44100.0,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-            ]
-            
-            // Create and configure recorder
-            audioRecorder = try AVAudioRecorder(url: filePath, settings: settings)
+            // Create and configure the audio recorder
+            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
+            audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.prepareToRecord()
             
             // Start recording
-            let success = audioRecorder?.record() ?? false
-            if success {
-                isRecording = true
-                audioFileURL = filePath
-                appState.updateState(to: .recording)
-                print("✅ Recording started successfully")
+            let success = audioRecorder?.record()
+            if success == true {
+                onStateChange?(.recording)
+                startLevelMonitoring()
             } else {
-                print("❌ Failed to start recording")
-                appState.updateState(to: .idle, message: "Failed to start recording")
+                throw AudioError.recordingFailed
             }
-            
         } catch {
-            print("❌ Failed to setup recording: \(error)")
-            appState.updateState(to: .idle, message: "Failed to setup recording: \(error.localizedDescription)")
+            throw AudioError.recordingFailed
         }
     }
-
-    @MainActor
-    func stopRecording() {
-        print("🛑 Stop recording requested")
-        guard isRecording else {
-            print("⚠️ Not currently recording")
-            return
+    
+    func stopRecording() async throws -> Data {
+        guard let recorder = audioRecorder,
+              let url = recordingURL else {
+            throw AudioError.noActiveRecording
         }
         
-        finishRecording()
-    }
-
-    @MainActor
-    private func finishRecording() {
-        print("🏁 Finishing recording...")
-        guard isRecording else {
-            print("⚠️ finishRecording called but not recording")
-            return
-        }
+        // Stop recording
+        recorder.stop()
+        stopLevelMonitoring()
         
-        isRecording = false
-        
-        // Stop the recorder
-        audioRecorder?.stop()
-        audioRecorder = nil
-        
-        guard let audioFileURL = self.audioFileURL else {
-            appState.updateState(to: .idle, message: "No audio file to transcribe")
-            return
-        }
-
-        Task {
-            await transcribeAudio(at: audioFileURL)
-        }
-    }
-
-    @MainActor
-    func cancelRecording() {
-        print("❌ Cancelling recording")
-        isRecording = false
-        
-        // Stop the recorder
-        audioRecorder?.stop()
-        audioRecorder = nil
-        
-        if let url = audioFileURL {
-            try? FileManager.default.removeItem(at: url)
-        }
-        audioFileURL = nil
-        appState.updateState(to: .idle)
-        print("🗑️ Recording cancelled and file deleted.")
-    }
-
-    @MainActor
-    private func transcribeAudio(at url: URL) async {
-        print("📝 Starting transcription...")
-        appState.updateState(to: .transcribing)
+        // Read the recorded data
         do {
-            let transcribedText = try await transcriptionService.transcribe(audioURL: url)
-            print("✅ Transcription successful: \(transcribedText)")
-
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(transcribedText, forType: .string)
-            appState.updateState(to: .idle, message: "Copied to clipboard!")
-
-            // Clean up temp file
-            try? FileManager.default.removeItem(at: url)
-            audioFileURL = nil
-
-        } catch {
-            print("🛑 Transcription failed: \(error)")
-            appState.updateState(to: .idle, message: "Transcription failed: \(error.localizedDescription)")
+            let data = try Data(contentsOf: url)
             
-            // Clean up temp file on error
+            // Clean up
             try? FileManager.default.removeItem(at: url)
-            audioFileURL = nil
+            audioRecorder = nil
+            recordingURL = nil
+            
+            return data
+        } catch {
+            throw AudioError.fileReadFailed
+        }
+    }
+    
+    private func startLevelMonitoring() {
+        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateAudioLevels()
+            }
+        }
+    }
+    
+    private func stopLevelMonitoring() {
+        levelTimer?.invalidate()
+        levelTimer = nil
+        
+        // Send empty levels to reset the UI
+        onAudioLevelsUpdate?([])
+    }
+    
+    private func updateAudioLevels() {
+        guard let recorder = audioRecorder else { return }
+        
+        recorder.updateMeters()
+        
+        // Get the average power level
+        let averagePower = recorder.averagePower(forChannel: 0)
+        let peakPower = recorder.peakPower(forChannel: 0)
+        
+        // Convert dB to a normalized value (0.0 to 1.0)
+        let normalizedAverage = normalizeAudioLevel(averagePower)
+        let normalizedPeak = normalizeAudioLevel(peakPower)
+        
+        // Create an array of levels for the waveform visualization
+        // We'll simulate multiple bars by adding some variation
+        var levels: [Float] = []
+        let baseLevel = normalizedAverage
+        
+        for _ in 0..<16 {
+            let variation = Float.random(in: -0.1...0.1)
+            let level = max(0.0, min(1.0, baseLevel + variation))
+            levels.append(level)
+        }
+        
+        // Add some emphasis to the center bars
+        if levels.count >= 8 {
+            levels[6] = max(levels[6], normalizedPeak * 0.8)
+            levels[7] = max(levels[7], normalizedPeak * 0.9)
+            levels[8] = max(levels[8], normalizedPeak)
+            levels[9] = max(levels[9], normalizedPeak * 0.9)
+        }
+        
+        onAudioLevelsUpdate?(levels)
+    }
+    
+    private func normalizeAudioLevel(_ decibels: Float) -> Float {
+        // Convert dB to linear scale
+        // -60 dB is considered silence, 0 dB is maximum
+        let minDB: Float = -60.0
+        let maxDB: Float = 0.0
+        
+        let clampedDB = max(minDB, min(maxDB, decibels))
+        let normalized = (clampedDB - minDB) / (maxDB - minDB)
+        
+        return normalized
+    }
+}
+
+// MARK: - AVAudioRecorderDelegate
+extension AudioService: AVAudioRecorderDelegate {
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        Task { @MainActor in
+            if !flag {
+                onStateChange?(.idle)
+            }
+        }
+    }
+    
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor in
+            onStateChange?(.idle)
+        }
+    }
+}
+
+// MARK: - Error Types
+enum AudioError: LocalizedError {
+    case permissionDenied
+    case fileCreationFailed
+    case recordingFailed
+    case noActiveRecording
+    case fileReadFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            return "Microphone permission denied"
+        case .fileCreationFailed:
+            return "Could not create recording file"
+        case .recordingFailed:
+            return "Recording failed to start"
+        case .noActiveRecording:
+            return "No active recording to stop"
+        case .fileReadFailed:
+            return "Could not read recording file"
         }
     }
 } 

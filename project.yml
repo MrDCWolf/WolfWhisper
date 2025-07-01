@@ -15,8 +15,6 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - WolfWhisper
-      - path: WolfWhisper/KeychainService.swift
-      - path: WolfWhisper/TranscriptionService.swift
     resources:
       - WolfWhisper/Assets.xcassets
       - WolfWhisper/Info.plist

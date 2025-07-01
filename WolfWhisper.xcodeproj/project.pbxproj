@@ -8,15 +8,23 @@
 
 /* Begin PBXBuildFile section */
 		065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E288A012473F7F722F7063 /* KeychainService.swift */; };
+		0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */; };
+		3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB11 /* HotkeyService.swift */; };
 		4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E868304B1233FA19B9C104 /* ContentView.swift */; };
 		4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */; };
+		4EEB6190A1F561844F6A9337 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC1FF827BE7386A262504F /* SettingsView.swift */; };
 		5268EBFBEA28B87F3565C8F0 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908A50274BE4BBC01EC555BB /* AppState.swift */; };
 		63A90D417BBC2C693C6C5361 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */; };
 		725587C72BEAD462F98EFE31 /* AudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9800E2A361A7808509B7A68 /* AudioService.swift */; };
+		7C824CA662371B0E92CE7772 /* FloatingRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */; };
+		B8994E5E5FA3B3B8220C38CB /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2284274775507B1AB47C60D /* WaveformView.swift */; };
 		F71C795448F970245BBB71E5 /* WolfWhisperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingRecordingView.swift; sourceTree = "<group>"; };
+		07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		498948B290C8A7419E2BEB11 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WolfWhisperApp.swift; sourceTree = "<group>"; };
 		908A50274BE4BBC01EC555BB /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
@@ -24,8 +32,10 @@
 		B9E288A012473F7F722F7063 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CE0BCEC3CE08393FEA8781B8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D2284274775507B1AB47C60D /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
 		D6986D970BD822E6BC786CE3 /* WolfWhisper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WolfWhisper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D9800E2A361A7808509B7A68 /* AudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioService.swift; sourceTree = "<group>"; };
+		EBCC1FF827BE7386A262504F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -44,9 +54,14 @@
 				CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */,
 				D9800E2A361A7808509B7A68 /* AudioService.swift */,
 				A9E868304B1233FA19B9C104 /* ContentView.swift */,
+				042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */,
+				498948B290C8A7419E2BEB11 /* HotkeyService.swift */,
 				CE0BCEC3CE08393FEA8781B8 /* Info.plist */,
 				B9E288A012473F7F722F7063 /* KeychainService.swift */,
+				07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */,
+				EBCC1FF827BE7386A262504F /* SettingsView.swift */,
 				63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */,
+				D2284274775507B1AB47C60D /* WaveformView.swift */,
 				6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */,
 			);
 			path = WolfWhisper;
@@ -130,8 +145,13 @@
 				5268EBFBEA28B87F3565C8F0 /* AppState.swift in Sources */,
 				725587C72BEAD462F98EFE31 /* AudioService.swift in Sources */,
 				4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */,
+				7C824CA662371B0E92CE7772 /* FloatingRecordingView.swift in Sources */,
+				3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */,
 				065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */,
+				0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */,
+				4EEB6190A1F561844F6A9337 /* SettingsView.swift in Sources */,
 				4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */,
+				B8994E5E5FA3B3B8220C38CB /* WaveformView.swift in Sources */,
 				F71C795448F970245BBB71E5 /* WolfWhisperApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
