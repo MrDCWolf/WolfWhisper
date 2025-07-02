@@ -124,6 +124,11 @@ struct ModernGeneralSettingsView: View {
                             title: "Launch at login",
                             isOn: $settings.launchAtLogin
                         )
+                        
+                        ModernToggle(
+                            title: "AI Smart cleanup",
+                            isOn: $settings.aiSmartCleanupEnabled
+                        )
                     }
                 }
             }

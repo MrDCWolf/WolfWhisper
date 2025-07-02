@@ -109,11 +109,11 @@ struct FloatingRecordingView: View {
                 // Main visualizer and content
                 switch appState.currentState {
                 case .recording:
-                    RecordingStateView(audioLevels: appState.audioLevels)
+                    RecordingStateView(audioLevels: appState.audioLevels, appState: appState)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     
                 case .transcribing:
-                    TranscribingStateView()
+                    TranscribingStateView(appState: appState)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     
                 case .idle:
@@ -136,6 +136,7 @@ struct FloatingRecordingView: View {
 // MARK: - Recording State View with Data Wave Visualizer
 struct RecordingStateView: View {
     let audioLevels: [Float]
+    @ObservedObject var appState: AppStateModel
     
     var body: some View {
         VStack(spacing: 24) {
@@ -150,6 +151,26 @@ struct RecordingStateView: View {
                         .foregroundStyle(.primary)
                     
                     AnimatedEllipsis()
+                }
+                
+                // AI Smart indicator if enabled
+                if appState.settings.aiSmartCleanupEnabled {
+                    HStack(spacing: 4) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.blue)
+                        Text("+SmartAI")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.blue)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.blue.opacity(0.1))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(.blue.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 
                 // Instructional text
@@ -259,17 +280,47 @@ struct AudioWaveformBar: View {
 
 // MARK: - Transcribing State View
 struct TranscribingStateView: View {
+    @ObservedObject var appState: AppStateModel
+    
     var body: some View {
         VStack(spacing: 24) {
             // Transform wave into processing indicator
             ProcessingIndicator()
             
             VStack(spacing: 8) {
-                Text("Transcribing")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.primary)
+                // Show step-by-step progress
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.green)
+                        Text("Transcribe")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    
+                    if appState.settings.aiSmartCleanupEnabled {
+                        HStack(spacing: 8) {
+                            if appState.statusText.contains("AI Smart") {
+                                // Currently processing AI Smart
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Image(systemName: "arrow.right.circle")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.blue)
+                            }
+                            Text("+SmartAI")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(appState.statusText.contains("AI Smart") ? .blue : .secondary)
+                            Spacer()
+                        }
+                    }
+                }
                 
-                Text("Please wait...")
+                Text(appState.statusText.contains("AI Smart") ? "Applying AI Smart cleanup..." : "Please wait...")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

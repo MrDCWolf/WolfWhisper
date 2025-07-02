@@ -11,6 +11,7 @@
 		0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */; };
 		3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB11 /* HotkeyService.swift */; };
 		3E4804C699DC392A038E0C1F /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */; };
+		EC2A13316BC04D739B26FA47 /* AISmartCleanupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A04715AA9D4AFCA692E93E /* AISmartCleanupService.swift */; };
 		4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E868304B1233FA19B9C104 /* ContentView.swift */; };
 		4C24777A546F35B48879E982 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */; };
 		4EEB6190A1F561844F6A9337 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC1FF827BE7386A262504F /* SettingsView.swift */; };
@@ -25,6 +26,7 @@
 /* Begin PBXFileReference section */
 		042E74F653A0CB4671AEC402 /* FloatingRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingRecordingView.swift; sourceTree = "<group>"; };
 		07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		87A04715AA9D4AFCA692E93E /* AISmartCleanupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISmartCleanupService.swift; sourceTree = "<group>"; };
 		498948B290C8A7419E2BEB11 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderField.swift; sourceTree = "<group>"; };
 		63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
@@ -52,6 +54,7 @@
 		6FA780CE62DD58151EAE9855 /* WolfWhisper */ = {
 			isa = PBXGroup;
 			children = (
+				87A04715AA9D4AFCA692E93E /* AISmartCleanupService.swift */,
 				908A50274BE4BBC01EC555BB /* AppState.swift */,
 				CB04C6B8A5EC8F153FD05F3C /* Assets.xcassets */,
 				D9800E2A361A7808509B7A68 /* AudioService.swift */,
@@ -144,6 +147,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC2A13316BC04D739B26FA47 /* AISmartCleanupService.swift in Sources */,
 				5268EBFBEA28B87F3565C8F0 /* AppState.swift in Sources */,
 				725587C72BEAD462F98EFE31 /* AudioService.swift in Sources */,
 				4A892CDDE46D5A46360A896D /* ContentView.swift in Sources */,

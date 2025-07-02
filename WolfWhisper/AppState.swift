@@ -52,6 +52,7 @@ class SettingsModel: ObservableObject {
     @Published var hotkeyDisplay: String = "⌘⇧D" // Stored property for UI display
     @Published var showInMenuBar: Bool = false
     @Published var launchAtLogin: Bool = false
+    @Published var aiSmartCleanupEnabled: Bool = false
     
     private var keychainService: KeychainService {
         return KeychainService.shared
@@ -92,6 +93,7 @@ class SettingsModel: ObservableObject {
         
         showInMenuBar = UserDefaults.standard.bool(forKey: "showInMenuBar")
         launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
+        aiSmartCleanupEnabled = UserDefaults.standard.bool(forKey: "aiSmartCleanupEnabled")
     }
     
     func saveSettings() {
@@ -108,6 +110,7 @@ class SettingsModel: ObservableObject {
         UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
         UserDefaults.standard.set(showInMenuBar, forKey: "showInMenuBar")
         UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+        UserDefaults.standard.set(aiSmartCleanupEnabled, forKey: "aiSmartCleanupEnabled")
     }
     
     var isConfigured: Bool {
@@ -159,6 +162,7 @@ class SettingsModel: ObservableObject {
         info.append("Hotkey Key: \(hotkeyKey)")
         info.append("Show in Menu Bar: \(showInMenuBar)")
         info.append("Launch at Login: \(launchAtLogin)")
+        info.append("AI Smart Cleanup: \(aiSmartCleanupEnabled)")
         info.append("")
         
         info.append("=== System ===")
@@ -173,7 +177,7 @@ class SettingsModel: ObservableObject {
         
         info.append("=== UserDefaults ===")
         let defaults = UserDefaults.standard
-        let keys = ["selectedModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "hasCompletedOnboarding"]
+        let keys = ["selectedModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "aiSmartCleanupEnabled", "hasCompletedOnboarding"]
         for key in keys {
             info.append("\(key): \(defaults.object(forKey: key) ?? "nil")")
         }
@@ -205,6 +209,7 @@ class SettingsModel: ObservableObject {
         defaults.removeObject(forKey: "hotkeyDisplay")
         defaults.removeObject(forKey: "showInMenuBar")
         defaults.removeObject(forKey: "launchAtLogin")
+        defaults.removeObject(forKey: "aiSmartCleanupEnabled")
         defaults.removeObject(forKey: "hasCompletedOnboarding")
         
         // Clear keychain

@@ -67,7 +67,7 @@ struct WolfWhisperApp: App {
         .handlesExternalEvents(matching: Set(arrayLiteral: "settings"))
         
         // Menu Bar Extra - Fixed to avoid publishing loop by removing binding
-        MenuBarExtra("WolfWhisper", systemImage: "mic.circle.fill") {
+        MenuBarExtra("WolfWhisper", systemImage: "pawprint.circle.fill") {
             MenuBarView(appState: appState)
         }
         .menuBarExtraStyle(.window)
@@ -203,8 +203,9 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 8) {
                 // Status
                 HStack {
-                    Image(systemName: "mic.circle.fill")
-                        .foregroundColor(.blue)
+                    Image(systemName: "pawprint.circle.fill")
+                        .resizable()
+                        .frame(width: 16, height: 16)
                     Text(appState.statusText)
                         .font(.system(size: 13, weight: .medium))
                 }

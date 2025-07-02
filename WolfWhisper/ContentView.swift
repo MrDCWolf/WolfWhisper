@@ -39,23 +39,72 @@ struct ContentView: View {
             Task { @MainActor in
                 appState.debugInfo = "Debug: Transcription callback called!"
                 switch result {
-                case .success(let text):
-                    appState.debugInfo = "Debug: Got transcription: '\(text)' (length: \(text.count))"
-                    appState.setTranscribedText(text)
-                    appState.updateState(to: .idle)
+                case .success(let rawText):
+                    appState.debugInfo = "Debug: Got transcription: '\(rawText)' (length: \(rawText.count))"
                     
-                    // Always copy to clipboard
-                    hotkeyService.copyToClipboard(text)
-                    
-                    // If triggered by hotkey, paste after a delay to ensure proper focus
-                    if appState.wasTriggeredByHotkey {
-                        // Delay pasting to allow floating window to close and focus to return
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            hotkeyService.pasteToActiveWindow()
+                    // Check if AI Smart cleanup is enabled
+                    if appState.settings.aiSmartCleanupEnabled {
+                        appState.updateState(to: .transcribing, message: "Applying AI Smart cleanup...")
+                        appState.debugInfo = "Debug: Starting AI Smart cleanup..."
+                        
+                        do {
+                            let cleanedText = try await AISmartCleanupService.shared.performSmartCleanup(
+                                rawText: rawText,
+                                apiKey: appState.settings.apiKey
+                            )
                             
-                            // Reset the flag after pasting is complete
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                appState.wasTriggeredByHotkey = false
+                            appState.debugInfo = "Debug: AI cleanup complete: '\(cleanedText)' (length: \(cleanedText.count))"
+                            appState.setTranscribedText(cleanedText)
+                            appState.updateState(to: .idle)
+                            
+                            // Copy cleaned text to clipboard
+                            hotkeyService.copyToClipboard(cleanedText)
+                            
+                            // If triggered by hotkey, paste after a delay
+                            if appState.wasTriggeredByHotkey {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    hotkeyService.pasteToActiveWindow()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        appState.wasTriggeredByHotkey = false
+                                    }
+                                }
+                            }
+                            
+                        } catch {
+                            appState.debugInfo = "Debug: AI cleanup failed: \(error), using raw text"
+                            // Fallback to raw text if AI cleanup fails
+                            appState.setTranscribedText(rawText)
+                            appState.updateState(to: .idle, message: "AI cleanup failed, using raw transcription")
+                            
+                            hotkeyService.copyToClipboard(rawText)
+                            
+                            if appState.wasTriggeredByHotkey {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    hotkeyService.pasteToActiveWindow()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        appState.wasTriggeredByHotkey = false
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Use raw transcription without AI cleanup
+                        appState.setTranscribedText(rawText)
+                        appState.updateState(to: .idle)
+                        
+                        // Always copy to clipboard
+                        hotkeyService.copyToClipboard(rawText)
+                        
+                        // If triggered by hotkey, paste after a delay to ensure proper focus
+                        if appState.wasTriggeredByHotkey {
+                            // Delay pasting to allow floating window to close and focus to return
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                hotkeyService.pasteToActiveWindow()
+                                
+                                // Reset the flag after pasting is complete
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    appState.wasTriggeredByHotkey = false
+                                }
                             }
                         }
                     }
@@ -191,6 +240,32 @@ struct MainAppView: View {
                 
                 // Central Recording Interface
                 VStack(spacing: 12) {
+                    // AI Smart Cleanup Toggle
+                    if appState.currentState == .idle && appState.settings.isConfigured {
+                        HStack {
+                            Toggle(isOn: Binding(
+                                get: { appState.settings.aiSmartCleanupEnabled },
+                                set: { newValue in
+                                    appState.settings.aiSmartCleanupEnabled = newValue
+                                    appState.settings.saveSettings()
+                                }
+                            )) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "brain.head.profile")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(.blue)
+                                    Text("+SmartAI")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                }
+                            }
+                            .toggleStyle(SwitchToggleStyle())
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                    
                     // Glass-style Recording Button
                     ModernRecordingButton(
                         state: appState.currentState,
@@ -238,7 +313,7 @@ struct MainAppView: View {
                 }
                 
                 // Modern Transcription Panel
-                ModernTranscriptionPanel(text: appState.transcribedText)
+                ModernTranscriptionPanel(text: appState.transcribedText, appState: appState)
                 
                 // Sleek Footer with Hotkey
                 ModernFooterView(appState: appState)
@@ -266,9 +341,9 @@ struct ModernHeaderView: View {
                     .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
                 
                 Image(systemName: "pawprint.circle.fill")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .symbolRenderingMode(.hierarchical)
+                    .resizable()
+                    .frame(width: 32, height: 32)
+                    .foregroundStyle(.primary)
             }
             
             // App Title with Modern Typography
@@ -503,49 +578,116 @@ struct ModernTranscribingContent: View {
 
 struct ModernTranscriptionPanel: View {
     let text: String
+    @ObservedObject var appState: AppStateModel
     @State private var animateText = false
+    @State private var isReformatting = false
     
     var body: some View {
-        RoundedRectangle(cornerRadius: 20)
-            .fill(.thinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 5)
-            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-            .overlay(
-                Group {
-                    if text.isEmpty {
-                        // Empty state with elegant placeholder
-                        VStack(spacing: 16) {
-                            Image(systemName: "quote.bubble")
-                                .font(.system(size: 32, weight: .light))
-                                .foregroundStyle(.secondary)
-                                .symbolRenderingMode(.hierarchical)
-                            
-                            Text("No transcription yet")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            // Main transcription content
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.thinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                .overlay(
+                    Group {
+                        if text.isEmpty {
+                            // Empty state with elegant placeholder
+                            VStack(spacing: 16) {
+                                Image(systemName: "quote.bubble")
+                                    .font(.system(size: 32, weight: .light))
+                                    .foregroundStyle(.secondary)
+                                    .symbolRenderingMode(.hierarchical)
+                                
+                                Text("No transcription yet")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .transition(.opacity.combined(with: .scale))
+                        } else {
+                            // Transcribed text with typing animation
+                            ScrollView {
+                                Text(text)
+                                    .font(.system(size: 16, weight: .regular, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .lineSpacing(4)
+                                    .padding(20)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            }
+                            .animation(.easeInOut(duration: 0.5), value: text)
                         }
-                        .transition(.opacity.combined(with: .scale))
-                    } else {
-                        // Transcribed text with typing animation
-                        ScrollView {
-                            Text(text)
-                                .font(.system(size: 16, weight: .regular, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .lineSpacing(4)
-                                .padding(20)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                        .animation(.easeInOut(duration: 0.5), value: text)
                     }
+                )
+                .frame(height: 150)
+                .animation(.easeInOut(duration: 0.3), value: text.isEmpty)
+            
+            // Reformat button (only show if there's text and user has API configured)
+            if !text.isEmpty && appState.settings.isConfigured {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        reformatWithAI()
+                    }) {
+                        HStack(spacing: 6) {
+                            if isReformatting {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Image(systemName: "brain.head.profile")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            Text(isReformatting ? "Reformatting..." : "Reformat with +SmartAI")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.blue)
+                        .clipShape(Capsule())
+                        .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(isReformatting)
+                    .transition(.opacity.combined(with: .scale))
                 }
-            )
-            .frame(height: 150)
-            .animation(.easeInOut(duration: 0.3), value: text.isEmpty)
+                .padding(.top, 8)
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    private func reformatWithAI() {
+        guard !text.isEmpty && !isReformatting else { return }
+        
+        isReformatting = true
+        
+        Task {
+            do {
+                let reformattedText = try await AISmartCleanupService.shared.performSmartCleanup(
+                    rawText: text,
+                    apiKey: appState.settings.apiKey
+                )
+                
+                await MainActor.run {
+                    appState.setTranscribedText(reformattedText)
+                    // Copy reformatted text to clipboard
+                    HotkeyService.shared.copyToClipboard(reformattedText)
+                    isReformatting = false
+                }
+                
+            } catch {
+                await MainActor.run {
+                    print("⚠️ Manual AI reformat failed: \(error)")
+                    isReformatting = false
+                }
+            }
+        }
     }
 }
 
