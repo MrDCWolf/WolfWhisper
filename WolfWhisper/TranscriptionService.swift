@@ -54,14 +54,25 @@ class TranscriptionService: ObservableObject {
         // Add file parameter
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
+        
+        // Add prompt parameter for better transcription quality
+        let transcriptionPrompt = "Please provide a clean, well-formatted transcription with proper grammar, punctuation, and capitalization. Remove filler words like 'um', 'uh', 'ah', and stutters. Format as clear, professional text."
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"prompt\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(transcriptionPrompt)\r\n".data(using: .utf8)!)
         
         // Add response format parameter
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
         body.append("text\r\n".data(using: .utf8)!)
+        
+        // Add temperature parameter for more consistent results
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"temperature\"\r\n\r\n".data(using: .utf8)!)
+        body.append("0.2\r\n".data(using: .utf8)!)
         
         // Close boundary
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)

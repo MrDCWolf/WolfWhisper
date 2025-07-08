@@ -221,18 +221,67 @@ struct RecordingButtonContent: View {
 
 struct TranscribingButtonContent: View {
     @State private var rotationAngle: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var nodeOpacity: Double = 0.5
     
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 24, weight: .medium))
-                .foregroundColor(.white)
-                .rotationEffect(.degrees(rotationAngle))
-                .onAppear {
-                    withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                        rotationAngle = 360
-                    }
+            ZStack {
+                // Outer ring
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.cyan.opacity(0.8), Color.blue.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .frame(width: 35, height: 35)
+                    .rotationEffect(.degrees(rotationAngle))
+                
+                // Middle ring
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.6), Color.purple.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 28, height: 28)
+                    .rotationEffect(.degrees(-rotationAngle * 0.7))
+                
+                // Processing nodes
+                ForEach(0..<6, id: \.self) { node in
+                    Circle()
+                        .fill(Color.cyan)
+                        .frame(width: 2, height: 2)
+                        .offset(
+                            x: cos(Double(node) * .pi / 3) * 12,
+                            y: sin(Double(node) * .pi / 3) * 12
+                        )
+                        .rotationEffect(.degrees(rotationAngle * 0.5))
+                        .opacity(nodeOpacity)
                 }
+                
+                // Central brain
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white)
+                        .frame(width: 20, height: 16)
+                        .scaleEffect(pulseScale)
+                    
+                    Image(systemName: "brain")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.cyan)
+                        .scaleEffect(pulseScale)
+                }
+            }
+            .onAppear {
+                startAnimations()
+            }
             
             Text("Transcribing...")
                 .font(.caption)
@@ -240,7 +289,23 @@ struct TranscribingButtonContent: View {
                 .foregroundColor(.white.opacity(0.9))
         }
     }
+    
+    private func startAnimations() {
+        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+            rotationAngle = 360
+        }
+        
+        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+            pulseScale = 1.15
+        }
+        
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            nodeOpacity = 1.0
+        }
+    }
 }
+
+
 
 // Compact waveform for menu bar or small spaces
 struct CompactWaveformView: View {

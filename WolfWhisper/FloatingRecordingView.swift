@@ -308,28 +308,85 @@ struct CompletedStateView: View {
 // MARK: - Processing Indicator
 struct ProcessingIndicator: View {
     @State private var rotationAngle: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var nodeOpacity: Double = 0.5
     
     var body: some View {
         ZStack {
-            // Background circle
+            // Outer ring
             Circle()
-                .stroke(Color.white.opacity(0.2), lineWidth: 3)
-                .frame(width: 120, height: 120)
-            
-            // Animated arc
-            Circle()
-                .trim(from: 0, to: 0.3)
                 .stroke(
-                    Color.white.opacity(0.8),
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    LinearGradient(
+                        colors: [Color.cyan.opacity(0.8), Color.blue.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 4
                 )
-                .frame(width: 120, height: 120)
+                .frame(width: 100, height: 100)
                 .rotationEffect(.degrees(rotationAngle))
+            
+            // Middle ring
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.6), Color.purple.opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 3
+                )
+                .frame(width: 75, height: 75)
+                .rotationEffect(.degrees(-rotationAngle * 0.7))
+            
+            // Inner ring
+            Circle()
+                .stroke(Color.purple.opacity(0.4), lineWidth: 2)
+                .frame(width: 50, height: 50)
+                .rotationEffect(.degrees(rotationAngle * 1.3))
+            
+            // Processing nodes
+            ForEach(0..<8, id: \.self) { node in
+                Circle()
+                    .fill(Color.cyan)
+                    .frame(width: 6, height: 6)
+                    .offset(
+                        x: cos(Double(node) * .pi / 4) * 35,
+                        y: sin(Double(node) * .pi / 4) * 35
+                    )
+                    .rotationEffect(.degrees(rotationAngle * 0.5))
+                    .opacity(nodeOpacity)
+            }
+            
+            // Central brain
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white)
+                    .frame(width: 40, height: 32)
+                    .scaleEffect(pulseScale)
+                
+                Image(systemName: "brain")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.cyan)
+                    .scaleEffect(pulseScale)
+            }
         }
         .onAppear {
-            withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
-                rotationAngle = 360
-            }
+            startProcessingAnimations()
+        }
+    }
+    
+    private func startProcessingAnimations() {
+        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+            rotationAngle = 360
+        }
+        
+        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+            pulseScale = 1.15
+        }
+        
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            nodeOpacity = 1.0
         }
     }
 }
