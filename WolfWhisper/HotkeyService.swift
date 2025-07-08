@@ -183,6 +183,18 @@ extension HotkeyService {
             return
         }
         
+        // First try to use accessibility API to find the focused element
+        // This ensures we're actually using accessibility features
+        let systemWideElement = AXUIElementCreateSystemWide()
+        var focusedApp: AnyObject?
+        let result = AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedApplicationAttribute as CFString, &focusedApp)
+        
+        if result == .success {
+            print("✅ Successfully accessed focused application via accessibility API")
+        } else {
+            print("⚠️ Failed to access focused application: \(result)")
+        }
+        
         // Simulate Cmd+V to paste
         let source = CGEventSource(stateID: .hidSystemState)
         
@@ -217,16 +229,34 @@ extension HotkeyService {
     
     func requestAccessibilityPermissions() {
         print("🔐 Requesting accessibility permissions...")
-        DispatchQueue.main.async {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            let result = AXIsProcessTrustedWithOptions(options)
-            print("🔐 Accessibility permission request result: \(result)")
-            
-            if !result {
-                print("🔐 Permission not granted, opening System Settings...")
-                // Also open System Settings as fallback
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                    NSWorkspace.shared.open(url)
+        
+        // First check if we already have permissions
+        if AXIsProcessTrusted() {
+            print("🔐 Already have accessibility permissions")
+            return
+        }
+        
+        // Try to actually use accessibility features to trigger the proper permission request
+        // This will cause macOS to show the permission dialog
+        let systemWideElement = AXUIElementCreateSystemWide()
+        var focusedApp: AnyObject?
+        let result = AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedApplicationAttribute as CFString, &focusedApp)
+        
+        print("🔐 Accessibility API call result: \(result)")
+        
+        // Always try with the prompt option to ensure the dialog is shown
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        print("🔐 Accessibility permission request result: \(trusted)")
+        
+        // If still no permissions after a delay, open System Settings as fallback
+        if !trusted {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if !AXIsProcessTrusted() {
+                    print("🔐 Still no permissions after delay, opening System Settings...")
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
             }
         }
