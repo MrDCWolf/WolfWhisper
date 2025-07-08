@@ -148,8 +148,9 @@ struct WolfWhisperApp: App {
                 display: true
             )
         }) {
-            // Close window after animation completes
-            window.close()
+            Task { @MainActor in
+                window.close()
+            }
         }
     }
     

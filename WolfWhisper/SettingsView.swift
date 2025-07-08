@@ -333,7 +333,7 @@ struct ModernAdvancedSettingsView: View {
                             Text("Version:")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
-                            Text("1.4.0")
+                            Text("1.0")
                                 .font(.system(size: 16, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
@@ -502,7 +502,7 @@ struct ModernSidebar: View {
                     Text("WolfWhisper")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
-                    Text("Version 1.4.0")
+                    Text("Version 1.0")
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(.secondary)
                 }
