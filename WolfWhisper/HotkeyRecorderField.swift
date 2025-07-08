@@ -3,8 +3,8 @@ import Carbon
 
 struct HotkeyRecorderField: View {
     @Binding var hotkeyDisplay: String
-    @Binding var hotkeyModifiers: UInt
-    @Binding var hotkeyKey: UInt16
+    @Binding var hotkeyModifiers: NSEvent.ModifierFlags
+    @Binding var hotkeyKey: String
     @State private var isRecording = false
     @State private var globalEventMonitor: Any?
     @State private var localEventMonitor: Any?
@@ -50,26 +50,22 @@ struct HotkeyRecorderField: View {
     }
     
     private func startRecording() {
-        print("🎯 Starting hotkey recording...")
         isRecording = true
         isFieldFocused = true
         
         // Monitor global events (when app is not focused)
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { event in
-            print("🌍 Global event: keyCode=\(event.keyCode), modifiers=\(event.modifierFlags)")
             handleNSEvent(event)
         }
         
         // Monitor local events (when app is focused)
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
-            print("🏠 Local event: keyCode=\(event.keyCode), modifiers=\(event.modifierFlags)")
             handleNSEvent(event)
             return nil // Consume the event
         }
     }
     
     private func stopRecording() {
-        print("🛑 Stopping hotkey recording...")
         isRecording = false
         isFieldFocused = false
         
@@ -88,25 +84,19 @@ struct HotkeyRecorderField: View {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let keyCode = event.keyCode
         
-        print("🔍 Processing NSEvent: keyCode=\(keyCode), modifiers=\(modifiers)")
-        
         // Only capture combinations with at least one modifier
         if !modifiers.isEmpty && keyCode != 0 {
-            let modifierFlags = convertModifiersToUInt(modifiers)
-            captureHotkey(modifiers: modifierFlags, keyCode: keyCode)
-        } else {
-            print("⚠️ Ignoring event - no modifiers or invalid keyCode")
+            captureHotkey(modifiers: modifiers, keyCode: keyCode)
         }
     }
     
-    private func captureHotkey(modifiers: UInt, keyCode: UInt16) {
-        let displayString = createDisplayString(modifiers: modifiers, keyCode: keyCode)
-        
-        print("✅ Captured hotkey: modifiers=\(modifiers), keyCode=\(keyCode), display=\(displayString)")
+    private func captureHotkey(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) {
+        let keyString = keyCodeToString(keyCode)
+        let displayString = createDisplayString(modifiers: modifiers, keyString: keyString)
         
         DispatchQueue.main.async {
             self.hotkeyModifiers = modifiers
-            self.hotkeyKey = keyCode
+            self.hotkeyKey = keyString
             self.hotkeyDisplay = displayString
             
             // Auto-stop recording after capture
@@ -115,44 +105,24 @@ struct HotkeyRecorderField: View {
             }
         }
     }
-    
-    private func convertModifiersToUInt(_ modifiers: NSEvent.ModifierFlags) -> UInt {
-        var result: UInt = 0
-        
-        if modifiers.contains(.command) {
-            result |= UInt(cmdKey)
-        }
-        if modifiers.contains(.option) {
-            result |= UInt(optionKey)
-        }
-        if modifiers.contains(.control) {
-            result |= UInt(controlKey)
-        }
-        if modifiers.contains(.shift) {
-            result |= UInt(shiftKey)
-        }
-        
-        return result
-    }
-    
-    private func createDisplayString(modifiers: UInt, keyCode: UInt16) -> String {
+
+    private func createDisplayString(modifiers: NSEvent.ModifierFlags, keyString: String) -> String {
         var result = ""
         
-        if modifiers & UInt(controlKey) != 0 {
+        if modifiers.contains(.control) {
             result += "⌃"
         }
-        if modifiers & UInt(optionKey) != 0 {
+        if modifiers.contains(.option) {
             result += "⌥"
         }
-        if modifiers & UInt(shiftKey) != 0 {
+        if modifiers.contains(.shift) {
             result += "⇧"
         }
-        if modifiers & UInt(cmdKey) != 0 {
+        if modifiers.contains(.command) {
             result += "⌘"
         }
         
-        // Convert key code to character
-        result += keyCodeToString(keyCode)
+        result += keyString
         
         return result
     }
@@ -216,7 +186,7 @@ struct HotkeyRecorderField: View {
         case 0x6D: return "F10"
         case 0x67: return "F11"
         case 0x6F: return "F12"
-        default: return "Unknown(\(keyCode))"
+        default: return ""
         }
     }
 } 

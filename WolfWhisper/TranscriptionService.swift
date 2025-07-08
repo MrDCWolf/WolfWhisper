@@ -1,31 +1,28 @@
 import Foundation
+import OSLog
 
-@MainActor
-class TranscriptionService: ObservableObject {
+final class TranscriptionService: Sendable {
     static let shared = TranscriptionService()
-    
-    // Callback for transcription completion
-    var onTranscriptionComplete: ((Result<String, Error>) -> Void)?
+    private let logger = Logger(subsystem: "com.wolfwhisper.app", category: "TranscriptionService")
     
     private init() {}
     
-    func transcribe(audioData: Data, apiKey: String, model: String) async throws {
-        print("Starting transcription with \(audioData.count) bytes of audio data")
+    func transcribe(audioData: Data, apiKey: String, model: String) async throws -> String {
+        logger.info("Starting OpenAI transcription with \(audioData.count) bytes of audio data")
         
         guard !apiKey.isEmpty else {
+            logger.error("API key is missing.")
             let error = TranscriptionError.invalidAPIKey
-            print("Transcription failed: Invalid API key")
-            onTranscriptionComplete?(.failure(error))
+            logger.error("Transcription failed: Invalid API key")
             throw error
         }
         
         do {
             let transcribedText = try await performTranscription(audioData: audioData, apiKey: apiKey, model: model)
-            print("Transcription successful: \(transcribedText)")
-            onTranscriptionComplete?(.success(transcribedText))
+            logger.info("OpenAI Transcription successful")
+            return transcribedText
         } catch {
-            print("Transcription failed with error: \(error)")
-            onTranscriptionComplete?(.failure(error))
+            logger.error("OpenAI Transcription failed with error: \(error.localizedDescription)")
             throw error
         }
     }
@@ -87,19 +84,8 @@ class TranscriptionService: ObservableObject {
                 }
             }
             
-            // Parse the response text
-            guard let transcriptionText = String(data: data, encoding: .utf8) else {
-                throw TranscriptionError.invalidResponse
-            }
-            
-            // Clean up the transcription text
-            let cleanedText = transcriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            guard !cleanedText.isEmpty else {
-                throw TranscriptionError.emptyTranscription
-            }
-            
-            return cleanedText
+            let transcriptionResponse = try JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data)
+            return transcriptionResponse.text
             
         } catch let error as TranscriptionError {
             throw error
@@ -109,8 +95,12 @@ class TranscriptionService: ObservableObject {
     }
 }
 
+struct OpenAITranscriptionResponse: Decodable {
+    let text: String
+}
+
 // MARK: - Error Types
-enum TranscriptionError: LocalizedError {
+enum TranscriptionError: Error, LocalizedError {
     case invalidAPIKey
     case invalidURL
     case invalidResponse

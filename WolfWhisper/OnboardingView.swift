@@ -3,7 +3,7 @@ import AVFoundation
 @preconcurrency import ApplicationServices
 
 struct OnboardingView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         ZStack {
@@ -38,7 +38,7 @@ struct OnboardingView: View {
 }
 
 struct WelcomeView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         VStack(spacing: 30) {
@@ -110,7 +110,7 @@ struct FeatureRow: View {
 }
 
 struct APIKeySetupView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     @State private var apiKey: String = ""
     @State private var isValidating: Bool = false
     @State private var validationError: String?
@@ -177,7 +177,7 @@ struct APIKeySetupView: View {
         }
         .frame(maxWidth: 500)
         .onAppear {
-            apiKey = appState.settings.apiKey
+            apiKey = appState.openAIAPIKey
         }
     }
     
@@ -193,7 +193,7 @@ struct APIKeySetupView: View {
         }
         
         // Save the API key to settings but don't save to keychain until onboarding is complete
-        appState.settings.apiKey = apiKey
+        appState.openAIAPIKey = apiKey
         
         // For now, skip actual API validation and continue
         // In production, you might want to make a test API call
@@ -205,7 +205,7 @@ struct APIKeySetupView: View {
 }
 
 struct ModelSelectionView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         VStack(spacing: 30) {
@@ -224,12 +224,12 @@ struct ModelSelectionView: View {
             }
             
             VStack(spacing: 12) {
-                ForEach(WhisperModel.allCases, id: \.self) { model in
+                ForEach(TranscriptionProvider.openAI.models, id: \.self) { model in
                     ModelCard(
-                        model: model,
-                        isSelected: appState.settings.selectedModel == model,
+                        modelName: model,
+                        isSelected: appState.selectedOpenAIModel == model,
                         onSelect: {
-                            appState.settings.selectedModel = model
+                            appState.selectedOpenAIModel = model
                         }
                     )
                 }
@@ -244,7 +244,9 @@ struct ModelSelectionView: View {
                 .buttonStyle(SecondaryButtonStyle())
                 
                 Button("Continue") {
-                    appState.settings.saveSettings()
+                    Task {
+                        await appState.saveSettings()
+                    }
                     appState.onboardingState = .permissionsSetup
                 }
                 .buttonStyle(PrimaryButtonStyle())
@@ -257,45 +259,45 @@ struct ModelSelectionView: View {
 }
 
 struct ModelCard: View {
-    let model: WhisperModel
+    let modelName: String
     let isSelected: Bool
     let onSelect: () -> Void
     
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.displayName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    Text(model.description)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.blue)
-                }
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(modelName)
+                    .font(.headline)
+                Text(modelName == "whisper-1" ? "Default Model" : "A different model")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            .padding()
-            .background(isSelected ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-            )
+            
+            Spacer()
+            
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.blue)
+                    .font(.title2)
+            }
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding()
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.secondary.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+        )
+        .onTapGesture {
+            onSelect()
+        }
     }
 }
 
 struct PermissionsSetupView: View {
-    @ObservedObject var appState: AppStateModel
-    @State private var microphonePermission: AVAuthorizationStatus = .notDetermined
-    @State private var accessibilityPermission: Bool = false
+    @ObservedObject var appState: AppState
+    @State private var hasMicPermission: Bool = false
+    @State private var hasAccessibilityPermission: Bool = false
     
     var body: some View {
         VStack(spacing: 30) {
@@ -319,15 +321,15 @@ struct PermissionsSetupView: View {
                     icon: "mic.fill",
                     title: "Microphone Access",
                     description: "Required for voice recording",
-                    status: microphonePermission == .authorized ? .granted : .pending,
-                    action: requestMicrophonePermission
+                    status: hasMicPermission ? .granted : .pending,
+                    action: requestMicPermission
                 )
                 
                 PermissionRow(
                     icon: "keyboard",
                     title: "Accessibility Access",
                     description: "Required for global hotkey and text insertion",
-                    status: accessibilityPermission ? .granted : .pending,
+                    status: hasAccessibilityPermission ? .granted : .pending,
                     action: requestAccessibilityPermission
                 )
             }
@@ -344,57 +346,37 @@ struct PermissionsSetupView: View {
                     appState.onboardingState = .hotkeySetup
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(microphonePermission != .authorized)
+                .disabled(!hasMicPermission)
             }
         }
         .frame(maxWidth: 500)
-        .onAppear {
-            checkPermissions()
-        }
+        .onAppear(perform: checkPermissions)
     }
     
     private func checkPermissions() {
-        microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
-        accessibilityPermission = AXIsProcessTrusted()
+        // Check microphone permission
+        hasMicPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        
+        // Check accessibility permission
+        hasAccessibilityPermission = AXIsProcessTrusted()
     }
     
-    private func requestMicrophonePermission() {
-        Task {
-            let granted = await AVCaptureDevice.requestAccess(for: .audio)
-            await MainActor.run {
-                microphonePermission = granted ? .authorized : .denied
+    private func requestMicPermission() {
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            DispatchQueue.main.async {
+                self.hasMicPermission = granted
             }
         }
     }
     
     private func requestAccessibilityPermission() {
-        // Run on main thread to be safe
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        
+        // This just opens the dialog, the user has to manually grant permission
+        // We will re-check on appear
         DispatchQueue.main.async {
-            // Create options dictionary with prompt
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            
-            // Check if we're already trusted
-            let trusted = AXIsProcessTrustedWithOptions(options)
-            
-            if !trusted {
-                // Attempt a real accessibility action to trigger the system to add the app to the list
-                let source = CGEventSource(stateID: .hidSystemState)
-                let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-                cmdVDown?.flags = .maskCommand
-                let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-                cmdVUp?.flags = .maskCommand
-                
-                // Post the events - this will trigger the system dialog
-                cmdVDown?.post(tap: .cghidEventTap)
-                cmdVUp?.post(tap: .cghidEventTap)
-                
-                // Update the permission status after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.accessibilityPermission = AXIsProcessTrusted()
-                }
-            } else {
-                self.accessibilityPermission = true
-            }
+            self.hasAccessibilityPermission = trusted
         }
     }
 }
@@ -449,10 +431,7 @@ struct PermissionRow: View {
 }
 
 struct HotkeySetupView: View {
-    @ObservedObject var appState: AppStateModel
-    @State private var isRecordingHotkey = false
-    @State private var recordedModifiers = ""
-    @State private var recordedKey = ""
+    @ObservedObject var appState: AppState
     
     var body: some View {
         VStack(spacing: 30) {
@@ -471,70 +450,11 @@ struct HotkeySetupView: View {
                     .multilineTextAlignment(.center)
             }
             
-            VStack(spacing: 20) {
-                HStack {
-                    Text("Current Hotkey:")
-                        .font(.headline)
-                    Spacer()
-                    Text(appState.settings.hotkeyDisplay)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                }
-                
-                VStack(spacing: 12) {
-                    Button(action: {
-                        if isRecordingHotkey {
-                            stopRecording()
-                        } else {
-                            startRecording()
-                        }
-                    }) {
-                        Text(isRecordingHotkey ? "Recording... Press ESC to cancel" : "Change Hotkey")
-                            .foregroundColor(isRecordingHotkey ? .orange : .blue)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(isRecordingHotkey ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1))
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    if isRecordingHotkey {
-                        VStack(spacing: 8) {
-                            Text("Try these combinations:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 12) {
-                                ForEach(["⌘⇧D", "⌘⇧V", "⌘⇧T", "⌘⇧R"], id: \.self) { combo in
-                                    Button(combo) {
-                                        let parts = parseHotkeyCombo(combo)
-                                        appState.settings.hotkeyModifiers = parts.modifiers
-                                        appState.settings.hotkeyKey = parts.key
-                                        appState.settings.hotkeyDisplay = combo
-                                        stopRecording()
-                                    }
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(4)
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Toggle("Enable Global Hotkey", isOn: $appState.settings.hotkeyEnabled)
-                    .font(.headline)
-            }
-            .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(12)
+            HotkeyRecorderField(
+                hotkeyDisplay: $appState.hotkeyDisplay,
+                hotkeyModifiers: $appState.hotkeyModifiers,
+                hotkeyKey: $appState.hotkeyKey
+            )
             
             Spacer()
             
@@ -544,80 +464,16 @@ struct HotkeySetupView: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 
-                Button("Complete Setup") {
-                    // Now save everything including to keychain
-                    appState.settings.saveSettings()
-                    appState.completeOnboarding()
+                Button("Finish") {
+                    appState.hasCompletedOnboarding = true
+                    Task {
+                        await appState.saveSettings()
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }
         }
         .frame(maxWidth: 500)
-    }
-    
-    private func startRecording() {
-        isRecordingHotkey = true
-        recordedModifiers = ""
-        recordedKey = ""
-    }
-    
-    private func stopRecording() {
-        isRecordingHotkey = false
-    }
-    
-    private func parseHotkeyCombo(_ combo: String) -> (modifiers: UInt, key: UInt16) {
-        // Parse combinations like "⌘⇧D" into modifiers and key
-        let keyChar = combo.last ?? "D"
-        let modifierString = String(combo.dropLast())
-        
-        // Convert key character to key code
-        let keyCode: UInt16
-        switch keyChar.uppercased() {
-        case "A": keyCode = 0x00
-        case "B": keyCode = 0x0B
-        case "C": keyCode = 0x08
-        case "D": keyCode = 0x02
-        case "E": keyCode = 0x0E
-        case "F": keyCode = 0x03
-        case "G": keyCode = 0x05
-        case "H": keyCode = 0x04
-        case "I": keyCode = 0x22
-        case "J": keyCode = 0x26
-        case "K": keyCode = 0x28
-        case "L": keyCode = 0x25
-        case "M": keyCode = 0x2E
-        case "N": keyCode = 0x2D
-        case "O": keyCode = 0x1F
-        case "P": keyCode = 0x23
-        case "Q": keyCode = 0x0C
-        case "R": keyCode = 0x0F
-        case "S": keyCode = 0x01
-        case "T": keyCode = 0x11
-        case "U": keyCode = 0x20
-        case "V": keyCode = 0x09
-        case "W": keyCode = 0x0D
-        case "X": keyCode = 0x07
-        case "Y": keyCode = 0x10
-        case "Z": keyCode = 0x06
-        default: keyCode = 0x02 // Default to 'D'
-        }
-        
-        // Convert modifier symbols to flags
-        var modifierFlags: UInt = 0
-        if modifierString.contains("⌘") {
-            modifierFlags |= NSEvent.ModifierFlags.command.rawValue
-        }
-        if modifierString.contains("⇧") {
-            modifierFlags |= NSEvent.ModifierFlags.shift.rawValue
-        }
-        if modifierString.contains("⌥") {
-            modifierFlags |= NSEvent.ModifierFlags.option.rawValue
-        }
-        if modifierString.contains("⌃") {
-            modifierFlags |= NSEvent.ModifierFlags.control.rawValue
-        }
-        
-        return (modifiers: modifierFlags, key: keyCode)
     }
 }
 

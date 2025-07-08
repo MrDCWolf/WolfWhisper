@@ -3,21 +3,32 @@ import Foundation
 import CoreAudio
 
 @MainActor
-class AudioService: NSObject, ObservableObject {
+class AudioService: NSObject, ObservableObject, AVAudioRecorderDelegate {
     static let shared = AudioService()
-    
-    private var audioRecorder: AVAudioRecorder?
-    private var recordingURL: URL?
-    private var levelTimer: Timer?
-    
-    // Callbacks
-    var onStateChange: ((AppState) -> Void)?
-    var onAudioLevelsUpdate: (([Float]) -> Void)?
-    
-    private override init() {
-        super.init()
+
+    enum State {
+        case idle
+        case recording
+        case transcribing
     }
     
+    @Published var state: State = .idle
+    @Published var audioLevels: Float = 0.0
+    
+    // Callbacks
+    var onStateChange: ((AppStateValue) -> Void)?
+    var onAudioLevelsUpdate: ((Float) -> Void)?
+    
+    private var audioRecorder: AVAudioRecorder?
+    private var recordingURL: URL
+    private var levelTimer: Timer?
+    
+    private override init() { // Make init private for singleton
+        let tempDir = FileManager.default.temporaryDirectory
+        self.recordingURL = tempDir.appendingPathComponent("recording.m4a")
+        super.init()
+    }
+
     func getCurrentMicrophoneName() -> String {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
@@ -76,10 +87,6 @@ class AudioService: NSObject, ObservableObject {
         let fileName = "recording_\(Date().timeIntervalSince1970).m4a"
         recordingURL = tempDir.appendingPathComponent(fileName)
         
-        guard let url = recordingURL else {
-            throw AudioError.fileCreationFailed
-        }
-        
         // Set up recording settings
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
@@ -90,117 +97,68 @@ class AudioService: NSObject, ObservableObject {
         
         do {
             // Create and configure the audio recorder
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
+            audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
             audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = true
+            audioRecorder?.record()
             
-            // Start recording
-            let success = audioRecorder?.record()
-            if success == true {
-                onStateChange?(.recording)
-                startLevelMonitoring()
-            } else {
-                throw AudioError.recordingFailed
+            // Start timer to update audio levels
+            levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    self?.updateAudioLevels()
+                }
             }
+            
+            onStateChange?(.recording)
         } catch {
-            throw AudioError.recordingFailed
+            stopRecordingInternal()
+            throw error
         }
     }
     
     func stopRecording() async throws -> Data {
-        guard let recorder = audioRecorder,
-              let url = recordingURL else {
-            throw AudioError.noActiveRecording
-        }
+        stopRecordingInternal()
         
-        // Stop recording
-        recorder.stop()
-        stopLevelMonitoring()
-        
-        // Read the recorded data
+        // Read the audio file data
         do {
-            let data = try Data(contentsOf: url)
-            
-            // Clean up
-            try? FileManager.default.removeItem(at: url)
-            audioRecorder = nil
-            recordingURL = nil
-            
-            return data
+            let audioData = try Data(contentsOf: recordingURL)
+            // Clean up the recording file
+            try? FileManager.default.removeItem(at: recordingURL)
+            onStateChange?(.idle)
+            return audioData
         } catch {
-            throw AudioError.fileReadFailed
+            throw error
         }
     }
     
-    private func startLevelMonitoring() {
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateAudioLevels()
-            }
-        }
-    }
-    
-    private func stopLevelMonitoring() {
+    private func stopRecordingInternal() {
+        audioRecorder?.stop()
         levelTimer?.invalidate()
         levelTimer = nil
         
         // Send empty levels to reset the UI
-        onAudioLevelsUpdate?([])
+        onAudioLevelsUpdate?(0.0)
     }
     
-    private func updateAudioLevels() {
+    @objc private func updateAudioLevels() {
         guard let recorder = audioRecorder else { return }
-        
         recorder.updateMeters()
         
-        // Get the average power level
+        // Calculate average power
         let averagePower = recorder.averagePower(forChannel: 0)
-        let peakPower = recorder.peakPower(forChannel: 0)
         
-        // Convert dB to a normalized value (0.0 to 1.0)
-        let normalizedAverage = normalizeAudioLevel(averagePower)
-        let normalizedPeak = normalizeAudioLevel(peakPower)
+        // Normalize to 0-1 range
+        let normalizedLevel = 1.0 - (abs(averagePower) / 160.0)
         
-        // Create an array of levels for the waveform visualization
-        // We'll simulate multiple bars by adding some variation
-        var levels: [Float] = []
-        let baseLevel = normalizedAverage
-        
-        for _ in 0..<16 {
-            let variation = Float.random(in: -0.1...0.1)
-            let level = max(0.0, min(1.0, baseLevel + variation))
-            levels.append(level)
-        }
-        
-        // Add some emphasis to the center bars
-        if levels.count >= 8 {
-            levels[6] = max(levels[6], normalizedPeak * 0.8)
-            levels[7] = max(levels[7], normalizedPeak * 0.9)
-            levels[8] = max(levels[8], normalizedPeak)
-            levels[9] = max(levels[9], normalizedPeak * 0.9)
-        }
-        
-        onAudioLevelsUpdate?(levels)
+        onAudioLevelsUpdate?(normalizedLevel)
     }
     
-    private func normalizeAudioLevel(_ decibels: Float) -> Float {
-        // Convert dB to linear scale
-        // -60 dB is considered silence, 0 dB is maximum
-        let minDB: Float = -60.0
-        let maxDB: Float = 0.0
-        
-        let clampedDB = max(minDB, min(maxDB, decibels))
-        let normalized = (clampedDB - minDB) / (maxDB - minDB)
-        
-        return normalized
-    }
-}
-
-// MARK: - AVAudioRecorderDelegate
-extension AudioService: AVAudioRecorderDelegate {
+    // MARK: - AVAudioRecorderDelegate
+    
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        Task { @MainActor in
-            if !flag {
+        if !flag {
+            // Handle recording error
+            Task { @MainActor in
                 onStateChange?(.idle)
             }
         }

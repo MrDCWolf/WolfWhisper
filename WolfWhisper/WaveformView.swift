@@ -100,7 +100,7 @@ struct WaveformBar: View {
 }
 
 struct RecordingButton: View {
-    let state: AppState
+    let state: AppStateValue
     let isRecording: Bool
     let audioLevels: [Float]
     let action: () -> Void
@@ -271,40 +271,35 @@ struct CompactWaveformView: View {
 }
 
 // Preview helpers
-struct WaveformView_Previews: PreviewProvider {
+struct RecordingButton_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 40) {
-            // Idle state
+        Group {
             RecordingButton(
                 state: .idle,
                 isRecording: false,
                 audioLevels: [],
                 action: {}
             )
+            .previewDisplayName("Idle State")
             
-            // Recording state
             RecordingButton(
                 state: .recording,
                 isRecording: true,
-                audioLevels: [0.3, 0.7, 0.5, 0.9, 0.4, 0.8, 0.6, 0.2],
+                audioLevels: (0..<32).map { _ in Float.random(in: 0.1...1.0) },
                 action: {}
             )
+            .previewDisplayName("Recording State")
             
-            // Transcribing state
             RecordingButton(
                 state: .transcribing,
                 isRecording: false,
                 audioLevels: [],
                 action: {}
             )
-            
-            // Compact waveform
-            CompactWaveformView(
-                audioLevels: [0.3, 0.7, 0.5, 0.9, 0.4, 0.8, 0.6, 0.2],
-                isRecording: true
-            )
+            .previewDisplayName("Transcribing State")
         }
         .padding()
-        .background(Color.gray.opacity(0.1))
+        .background(Color.gray.opacity(0.2))
+        .previewLayout(.sizeThatFits)
     }
-} 
+}

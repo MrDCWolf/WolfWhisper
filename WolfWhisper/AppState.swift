@@ -5,12 +5,24 @@ import AVFoundation
 import AppKit
 import UniformTypeIdentifiers
 import Combine
+import Carbon
 
 // The various states the application can be in.
-enum AppState {
+enum AppStateValue: String {
     case idle
     case recording
     case transcribing
+    
+    var statusText: String {
+        switch self {
+        case .idle:
+            return "Ready"
+        case .recording:
+            return "Recording..."
+        case .transcribing:
+            return "Transcribing..."
+        }
+    }
 }
 
 // Onboarding flow states
@@ -24,8 +36,10 @@ enum OnboardingState {
 }
 
 // Available Whisper models
-enum WhisperModel: String, CaseIterable {
+enum WhisperModel: String, CaseIterable, Identifiable {
     case whisper1 = "whisper-1"
+    
+    var id: String { self.rawValue }
     
     var displayName: String {
         switch self {
@@ -43,9 +57,11 @@ enum WhisperModel: String, CaseIterable {
 }
 
 // Available Gemini models
-enum GeminiModel: String, CaseIterable {
+enum GeminiModel: String, CaseIterable, Identifiable {
     case gemini25Flash = "gemini-2.5-flash"
     case gemini25FlashLite = "gemini-2.5-flash-lite-preview-06-17"
+    
+    var id: String { self.rawValue }
     
     var displayName: String {
         switch self {
@@ -67,9 +83,20 @@ enum GeminiModel: String, CaseIterable {
 }
 
 // Available transcription providers
-enum TranscriptionProvider: String, CaseIterable {
-    case openAI = "openai"
-    case gemini = "gemini"
+enum TranscriptionProvider: String, CaseIterable, Identifiable {
+    case openAI = "OpenAI"
+    case gemini = "Google Gemini"
+
+    var id: String { self.rawValue }
+
+    var models: [String] {
+        switch self {
+        case .openAI:
+            return ["whisper-1"]
+        case .gemini:
+            return ["gemini-2.5-flash", "gemini-2.5-flash-lite-preview-06-17"]
+        }
+    }
     
     var displayName: String {
         switch self {
@@ -90,122 +117,131 @@ enum TranscriptionProvider: String, CaseIterable {
     }
 }
 
-// Settings model
+// Main application state
 @MainActor
-class SettingsModel: ObservableObject {
-    @Published var apiKey: String = ""
-    @Published var selectedModel: WhisperModel = .whisper1
+class AppState: ObservableObject {
+    @Published var currentState: AppStateValue = .idle
+    @Published var transcribedText: String = ""
+    @Published var statusText: String = "Ready"
+    @Published var audioLevels: Float = 0.0
+    @Published var audioLevelHistory: [Float] = Array(repeating: 0.0, count: 32)
+    @Published var debugInfo: String = ""
+    @Published var showSettings: Bool = false
+
+    // Settings
+    @Published var openAIAPIKey: String = ""
+    @Published var selectedOpenAIModel: String = "whisper-1"
     @Published var hotkeyEnabled: Bool = true
-    @Published var hotkeyModifiers: UInt = 0 // Raw modifier flags
-    @Published var hotkeyKey: UInt16 = 0 // Raw key code
-    @Published var hotkeyDisplay: String = "⌘⇧D" // Stored property for UI display
-    @Published var showInMenuBar: Bool = false
+    @Published var hotkeyModifiers: NSEvent.ModifierFlags = .command
+    @Published var hotkeyKey: String = "D"
+    @Published var hotkeyDisplay: String = "⌘D"
+    @Published var selectedProvider: TranscriptionProvider = .openAI
+    @Published var geminiAPIKey: String = ""
+    @Published var selectedGeminiModel: String = "gemini-2.5-flash"
+    @Published var showInMenuBar: Bool = true
     @Published var launchAtLogin: Bool = false
     
-    // Provider and Gemini settings
-    @Published var selectedProvider: TranscriptionProvider = .openAI
-    @Published var geminiApiKey: String = ""
-    @Published var selectedGeminiModel: GeminiModel = .gemini25Flash
-    
-    private var keychainService: KeychainService {
-        return KeychainService.shared
-    }
+    // Onboarding
+    @Published var isFirstLaunch: Bool
+    @Published var hasCompletedOnboarding: Bool
+    @Published var onboardingState: OnboardingState = .welcome
+
+    private let openAIKeyAccount = "openai"
+    private let geminiKeyAccount = "gemini"
     
     init() {
-        loadSettings()
+        self.isFirstLaunch = !UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
+        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        
+        if isFirstLaunch {
+            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+        }
+
+        Task {
+            await loadSettings()
+        }
+    }
+
+    func updateState(to newState: AppStateValue, message: String? = nil) {
+        self.currentState = newState
+        self.statusText = message ?? newState.statusText
+    }
+
+    func updateAudioLevels(_ levels: Float) {
+        self.audioLevels = levels
+        self.audioLevelHistory.removeFirst()
+        self.audioLevelHistory.append(levels)
     }
     
-    func loadSettings() {
-        // Load API key from keychain only if we're past onboarding
+    func loadSettings() async {
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            loadApiKey()
+            openAIAPIKey = await KeychainService.shared.loadAPIKey(for: openAIKeyAccount) ?? ""
+            geminiAPIKey = await KeychainService.shared.loadAPIKey(for: geminiKeyAccount) ?? ""
         }
         
-        // Load other settings from UserDefaults
-        selectedModel = WhisperModel(rawValue: UserDefaults.standard.string(forKey: "selectedModel") ?? WhisperModel.whisper1.rawValue) ?? .whisper1
-        hotkeyEnabled = UserDefaults.standard.bool(forKey: "hotkeyEnabled")
+        selectedOpenAIModel = UserDefaults.standard.string(forKey: "selectedOpenAIModel") ?? "whisper-1"
+        selectedGeminiModel = UserDefaults.standard.string(forKey: "selectedGeminiModel") ?? "gemini-2.5-flash"
         
-        // Load hotkey settings with proper defaults for ⌘⇧D
-        let savedModifiers = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int
-        let savedKey = UserDefaults.standard.object(forKey: "hotkeyKey") as? Int
-        
-        if savedModifiers == nil || savedKey == nil {
-            // Set default ⌘⇧D hotkey using Carbon modifier flags
-            hotkeyModifiers = UInt(256 + 512) // cmdKey + shiftKey in Carbon
-            hotkeyKey = 2 // D key
-            hotkeyDisplay = "⌘⇧D"
-            // Save the defaults immediately
-            UserDefaults.standard.set(Int(hotkeyModifiers), forKey: "hotkeyModifiers")
-            UserDefaults.standard.set(Int(hotkeyKey), forKey: "hotkeyKey")
-            UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
+        let savedModifiers = UserDefaults.standard.integer(forKey: "hotkeyModifiers")
+        if let savedKey = UserDefaults.standard.string(forKey: "hotkeyKey"), savedModifiers != 0 {
+            hotkeyModifiers = NSEvent.ModifierFlags(rawValue: UInt(savedModifiers))
+            hotkeyKey = savedKey
+            hotkeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "⌘D"
         } else {
-            hotkeyModifiers = UInt(savedModifiers!)
-            hotkeyKey = UInt16(savedKey!)
-            hotkeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "⌘⇧D"
-        }
-        
-        showInMenuBar = UserDefaults.standard.bool(forKey: "showInMenuBar")
-        launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-        
-        // Load provider settings
-        selectedProvider = TranscriptionProvider(rawValue: UserDefaults.standard.string(forKey: "selectedProvider") ?? TranscriptionProvider.openAI.rawValue) ?? .openAI
-        selectedGeminiModel = GeminiModel(rawValue: UserDefaults.standard.string(forKey: "selectedGeminiModel") ?? GeminiModel.gemini25Flash.rawValue) ?? .gemini25Flash
-        
-        // Load Gemini API key from keychain
-        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            loadGeminiApiKey()
+            hotkeyModifiers = .command
+            hotkeyKey = "D"
+            hotkeyDisplay = "⌘D"
         }
     }
     
-    func saveSettings() {
-        // Save API key to keychain only if it's not empty and we've completed onboarding
-        if !apiKey.isEmpty && UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            _ = keychainService.saveApiKey(apiKey)
-        }
+    func saveSettings() async {
+        _ = await KeychainService.shared.saveAPIKey(openAIAPIKey, for: openAIKeyAccount)
+        _ = await KeychainService.shared.saveAPIKey(geminiAPIKey, for: geminiKeyAccount)
         
-        // Save other settings to UserDefaults
-        UserDefaults.standard.set(selectedModel.rawValue, forKey: "selectedModel")
+        UserDefaults.standard.set(selectedOpenAIModel, forKey: "selectedOpenAIModel")
+        UserDefaults.standard.set(selectedGeminiModel, forKey: "selectedGeminiModel")
         UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled")
-        UserDefaults.standard.set(Int(hotkeyModifiers), forKey: "hotkeyModifiers")
-        UserDefaults.standard.set(Int(hotkeyKey), forKey: "hotkeyKey")
+        UserDefaults.standard.set(Int(hotkeyModifiers.rawValue), forKey: "hotkeyModifiers")
+        UserDefaults.standard.set(hotkeyKey, forKey: "hotkeyKey")
         UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
+        UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.set(selectedProvider.rawValue, forKey: "selectedProvider")
         UserDefaults.standard.set(showInMenuBar, forKey: "showInMenuBar")
         UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
-        
-        // Save provider settings
-        UserDefaults.standard.set(selectedProvider.rawValue, forKey: "selectedProvider")
-        UserDefaults.standard.set(selectedGeminiModel.rawValue, forKey: "selectedGeminiModel")
-        
-        // Save Gemini API key to keychain if not empty and onboarding is complete
-        if !geminiApiKey.isEmpty && UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            _ = keychainService.saveGeminiApiKey(geminiApiKey)
-        }
     }
     
-    var isConfigured: Bool {
-        // Only consider configured if onboarding is complete AND appropriate API key exists
-        guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else {
-            return false
-        }
-        
-        switch selectedProvider {
-        case .openAI:
-            return !apiKey.isEmpty
-        case .gemini:
-            return !geminiApiKey.isEmpty
-        }
+    func isConfigured() -> Bool {
+        return !openAIAPIKey.isEmpty || !geminiAPIKey.isEmpty
     }
     
+    func updateHotkeyDisplay() {
+        var displayString = ""
+        if hotkeyModifiers.contains(.command) { displayString += "⌘" }
+        if hotkeyModifiers.contains(.shift) { displayString += "⇧" }
+        if hotkeyModifiers.contains(.option) { displayString += "⌥" }
+        if hotkeyModifiers.contains(.control) { displayString += "⌃" }
+        displayString += hotkeyKey.uppercased()
+        hotkeyDisplay = displayString
+    }
 
-    
-    func loadApiKey() {
-        apiKey = keychainService.loadApiKey() ?? ""
+    // Accessibility
+    @Published var accessibilityEnabled: Bool = AXIsProcessTrusted()
+
+    func requestAccessibilityPermission() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let _ = AXIsProcessTrustedWithOptions(options)
     }
-    
-    func loadGeminiApiKey() {
-        geminiApiKey = keychainService.loadGeminiApiKey() ?? ""
+
+    func checkAccessibilityPermission() {
+        accessibilityEnabled = AXIsProcessTrusted()
     }
-    
+
+    func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     func exportDebugLog() {
         let debugInfo = generateDebugInfo()
         
@@ -230,239 +266,26 @@ class SettingsModel: ObservableObject {
         
         info.append("WolfWhisper Debug Log")
         info.append("Generated: \(Date())")
-        info.append("Version: 1.4.0")
+        info.append("Version: 2.5.0")
         info.append("")
         
         info.append("=== Settings ===")
-        info.append("Selected Provider: \(selectedProvider.displayName)")
-        info.append("Selected Model: \(selectedModel.rawValue)")
-        info.append("Selected Gemini Model: \(selectedGeminiModel.rawValue)")
+        info.append("Selected Provider: \(selectedProvider.rawValue)")
+        info.append("Selected OpenAI Model: \(selectedOpenAIModel)")
+        info.append("Selected Gemini Model: \(selectedGeminiModel)")
         info.append("Hotkey Enabled: \(hotkeyEnabled)")
-        info.append("Hotkey Display: \(hotkeyDisplay)")
-        info.append("Hotkey Modifiers: \(hotkeyModifiers)")
-        info.append("Hotkey Key: \(hotkeyKey)")
+        info.append("Hotkey: \(hotkeyDisplay)")
         info.append("Show in Menu Bar: \(showInMenuBar)")
         info.append("Launch at Login: \(launchAtLogin)")
-
         info.append("")
         
-        info.append("=== System ===")
-        info.append("macOS Version: \(ProcessInfo.processInfo.operatingSystemVersionString)")
-        info.append("Current Microphone: \(AudioService.shared.getCurrentMicrophoneName())")
-        info.append("")
-        
-        info.append("=== Permissions ===")
-        info.append("Microphone Permission: \(checkMicrophonePermission())")
-        info.append("Accessibility Permission: \(checkAccessibilityPermission())")
-        info.append("")
-        
-        info.append("=== UserDefaults ===")
-        let defaults = UserDefaults.standard
-        let keys = ["selectedProvider", "selectedModel", "selectedGeminiModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "hasCompletedOnboarding"]
-        for key in keys {
-            info.append("\(key): \(defaults.object(forKey: key) ?? "nil")")
-        }
+        info.append("=== State ===")
+        info.append("Current State: \(currentState)")
+        info.append("Status Text: \(statusText)")
+        info.append("Accessibility Enabled: \(accessibilityEnabled)")
+        info.append("Is First Launch: \(isFirstLaunch)")
+        info.append("Onboarding State: \(onboardingState)")
         
         return info.joined(separator: "\n")
-    }
-    
-    private func checkMicrophonePermission() -> String {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized: return "Granted"
-        case .denied: return "Denied"
-        case .restricted: return "Restricted"
-        case .notDetermined: return "Not Determined"
-        @unknown default: return "Unknown"
-        }
-    }
-    
-    private func checkAccessibilityPermission() -> String {
-        return AXIsProcessTrusted() ? "Granted" : "Denied"
-    }
-    
-    func resetAllSettings() {
-        // Reset UserDefaults
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "selectedProvider")
-        defaults.removeObject(forKey: "selectedModel")
-        defaults.removeObject(forKey: "selectedGeminiModel")
-        defaults.removeObject(forKey: "hotkeyEnabled")
-        defaults.removeObject(forKey: "hotkeyModifiers")
-        defaults.removeObject(forKey: "hotkeyKey")
-        defaults.removeObject(forKey: "hotkeyDisplay")
-        defaults.removeObject(forKey: "showInMenuBar")
-        defaults.removeObject(forKey: "launchAtLogin")
-        defaults.removeObject(forKey: "hasCompletedOnboarding")
-        
-        // Clear keychain
-        keychainService.deleteApiKey()
-        keychainService.deleteGeminiApiKey()
-        
-        // Reload settings
-        loadSettings()
-    }
-    
-    func checkAllPermissions() {
-        // Request microphone permission
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            DispatchQueue.main.async {
-                print("Microphone permission: \(granted ? "granted" : "denied")")
-            }
-        }
-        
-        // Check accessibility permission on the main thread
-        DispatchQueue.main.async {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            let trusted = AXIsProcessTrustedWithOptions(options)
-            
-            if !trusted {
-                // Attempt a real accessibility action to trigger the system to add the app to the list
-                let source = CGEventSource(stateID: .hidSystemState)
-                let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-                cmdVDown?.flags = .maskCommand
-                let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-                cmdVUp?.flags = .maskCommand
-                
-                // Post the events - this will trigger the system dialog
-                cmdVDown?.post(tap: .cghidEventTap)
-                cmdVUp?.post(tap: .cghidEventTap)
-                
-                print("Accessibility permission: requesting with real action")
-            } else {
-                print("Accessibility permission: already granted")
-            }
-        }
-    }
-}
-
-// An observable class to manage and publish the application's state.
-@MainActor
-class AppStateModel: ObservableObject {
-    @Published var currentState: AppState = .idle
-    @Published var statusText: String = "Ready to record"
-    @Published var onboardingState: OnboardingState = .welcome
-    @Published var isFirstLaunch: Bool = true
-    @Published var showSettings: Bool = false
-    @Published var transcribedText: String = ""
-    @Published var audioLevels: [Float] = []
-    @Published var wasTriggeredByHotkey: Bool = false
-    @Published var needsSetup: Bool = false
-    @Published var debugInfo: String = "Debug: No transcription yet"
-    
-    // Settings
-    @Published var settings = SettingsModel()
-    
-    private var settingsObserver: AnyCancellable?
-    
-    init() {
-        checkFirstLaunch()
-        setupSettingsObserver()
-    }
-    
-    private func setupSettingsObserver() {
-        // Listen to changes in the settings model and re-publish them
-        settingsObserver = settings.objectWillChange.sink { [weak self] _ in
-            // This will trigger UI updates when any settings property changes
-            self?.objectWillChange.send()
-        }
-    }
-    
-    private func checkFirstLaunch() {
-        isFirstLaunch = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        if isFirstLaunch {
-            onboardingState = .welcome
-        } else {
-            onboardingState = .completed
-        }
-    }
-    
-    func completeOnboarding() {
-        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-        isFirstLaunch = false
-        onboardingState = .completed
-    }
-    
-    func updateState(to newState: AppState, message: String? = nil) {
-        currentState = newState
-        
-        if let message = message {
-            statusText = message
-        } else {
-            switch newState {
-            case .idle:
-                statusText = "Ready to record"
-            case .recording:
-                statusText = "Recording... Click to stop"
-            case .transcribing:
-                statusText = "Transcribing audio..."
-            }
-        }
-    }
-    
-    func updateAudioLevels(_ levels: [Float]) {
-        audioLevels = levels
-    }
-    
-    func setTranscribedText(_ text: String) {
-        transcribedText = text
-        debugInfo = "Debug: Set text to '\(text)' (length: \(text.count))"
-    }
-    
-    func validateSetup() {
-        // Check if we need to show onboarding or settings
-        if isFirstLaunch {
-            // Show onboarding for first launch
-            needsSetup = false
-            return
-        }
-        
-        // Check all required settings and permissions
-        var missingRequirements: [String] = []
-        
-        // 1. Check API Key
-        if settings.apiKey.isEmpty {
-            missingRequirements.append("OpenAI API Key")
-        }
-        
-        // 2. Check microphone permissions
-        if !hasMicrophonePermission() {
-            missingRequirements.append("Microphone Access")
-        }
-        
-        // 3. Check accessibility permissions (for hotkeys)
-        if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
-            missingRequirements.append("Accessibility Access")
-        }
-        
-        if !missingRequirements.isEmpty {
-            needsSetup = true
-            statusText = "Setup required: \(missingRequirements.joined(separator: ", "))"
-            showSettings = true
-        } else {
-            needsSetup = false
-        }
-    }
-    
-    private func hasMicrophonePermission() -> Bool {
-        // This is a simplified check - in reality you'd use AVAudioSession
-        return true // For now, assume we have it
-    }
-    
-    private func hasAccessibilityPermissions() -> Bool {
-        // Check if the app has accessibility permissions
-        let trusted = AXIsProcessTrusted()
-        return trusted
-    }
-    
-    func startRecording() async {
-        // This will be called from menu bar - delegate to audio service
-        updateState(to: .recording)
-        // The actual recording logic should be handled by ContentView or AudioService
-    }
-    
-    func requestAccessibilityPermission() {
-        // Open System Preferences to Accessibility settings
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
     }
 } 

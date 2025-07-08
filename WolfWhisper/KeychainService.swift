@@ -1,101 +1,66 @@
 import Foundation
 import Security
 
-@MainActor
-class KeychainService {
+final class KeychainService: Sendable {
     static let shared = KeychainService()
     private let service = "com.wolfwhisper.apikey"
-    private let account = "openai"
-    private let geminiAccount = "gemini"
 
-    func saveApiKey(_ apiKey: String) -> Bool {
+    private init() {}
+
+    func saveAPIKey(_ apiKey: String, for account: String) async -> Bool {
         guard let data = apiKey.data(using: .utf8) else { return false }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data
-        ]
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        return status == errSecSuccess
+        
+        return await Task {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            // Delete any existing item
+            SecItemDelete(query as CFDictionary)
+            
+            let attributes: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecValueData as String: data
+            ]
+            
+            let status = SecItemAdd(attributes as CFDictionary, nil)
+            return status == errSecSuccess
+        }.value
     }
 
-    func loadApiKey() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var dataTypeRef: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-        guard status == errSecSuccess,
-              let data = dataTypeRef as? Data,
-              let apiKey = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return apiKey
+    func loadAPIKey(for account: String) async -> String? {
+        await Task {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne
+            ]
+            
+            var dataTypeRef: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
+            
+            guard status == errSecSuccess,
+                  let data = dataTypeRef as? Data,
+                  let apiKey = String(data: data, encoding: .utf8) else {
+                return nil
+            }
+            return apiKey
+        }.value
     }
 
-    func deleteApiKey() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
-    
-    // Gemini API Key methods
-    func saveGeminiApiKey(_ apiKey: String) -> Bool {
-        guard let data = apiKey.data(using: .utf8) else { return false }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: geminiAccount
-        ]
-        SecItemDelete(query as CFDictionary)
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: geminiAccount,
-            kSecValueData as String: data
-        ]
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        return status == errSecSuccess
-    }
-
-    func loadGeminiApiKey() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: geminiAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var dataTypeRef: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-        guard status == errSecSuccess,
-              let data = dataTypeRef as? Data,
-              let apiKey = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return apiKey
-    }
-
-    func deleteGeminiApiKey() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: geminiAccount
-        ]
-        SecItemDelete(query as CFDictionary)
+    func deleteAPIKey(for account: String) async {
+        await Task {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            SecItemDelete(query as CFDictionary)
+        }.value
     }
 } 

@@ -20,9 +20,5 @@
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>WolfWhisper needs microphone access to record your voice for dictation.</string>
-	<key>NSSystemAccessibilityUsageDescription</key>
-	<string>WolfWhisper needs accessibility permissions to paste copied text directly into the active window.</string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>To paste text into other applications, WolfWhisper needs your permission to send commands to them.</string>
 </dict>
 </plist>

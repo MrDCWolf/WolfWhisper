@@ -2,116 +2,72 @@ import SwiftUI
 import AVFoundation
 
 struct ContentView: View {
-    @ObservedObject var appState: AppStateModel
-    @StateObject private var audioService = AudioService.shared
-    @StateObject private var transcriptionService = TranscriptionService.shared
-    @StateObject private var hotkeyService = HotkeyService.shared
+    @ObservedObject var appState: AppState
     
     var body: some View {
-        MainAppView(appState: appState)
-        .onAppear {
-            setupServices()
-            setupHotkey()
-        }
-        .onChange(of: appState.settings.hotkeyEnabled) {
-            setupHotkey()
-        }
-        .onChange(of: appState.settings.hotkeyModifiers) {
-            setupHotkey()
-        }
-        .onChange(of: appState.settings.hotkeyKey) {
-            setupHotkey()
-        }
+        MainAppView(
+            appState: appState,
+            onStartRecording: startRecording,
+            onStopRecording: stopRecording
+        )
+            .onAppear {
+                setupServices()
+                setupHotkey()
+            }
+            .onChange(of: appState.hotkeyEnabled) { _ in setupHotkey() }
+            .onChange(of: appState.hotkeyModifiers) { _ in setupHotkey() }
+            .onChange(of: appState.hotkeyKey) { _ in setupHotkey() }
     }
     
     private func setupServices() {
         // Set up audio service callbacks
-        audioService.onStateChange = { state in
+        AudioService.shared.onStateChange = { state in
             appState.updateState(to: state)
         }
         
-        audioService.onAudioLevelsUpdate = { levels in
+        AudioService.shared.onAudioLevelsUpdate = { levels in
             appState.updateAudioLevels(levels)
         }
         
-        // Set up transcription service callback
-        transcriptionService.onTranscriptionComplete = { result in
-            Task { @MainActor in
-                appState.debugInfo = "Debug: Transcription callback called!"
-                switch result {
-                case .success(let transcribedText):
-                    appState.debugInfo = "Debug: Got transcription: '\(transcribedText)' (length: \(transcribedText.count))"
-                    
-                    // Use the transcribed text directly
-                    appState.setTranscribedText(transcribedText)
-                    appState.updateState(to: .idle)
-                    
-                    // Copy transcribed text to clipboard
-                    hotkeyService.copyToClipboard(transcribedText)
-                    
-                    // If triggered by hotkey, paste after a delay
-                    if appState.wasTriggeredByHotkey {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            hotkeyService.pasteToActiveWindow()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                appState.wasTriggeredByHotkey = false
-                            }
-                        }
-                    }
-                    
-                case .failure(let error):
-                    appState.debugInfo = "Debug: Transcription failed: \(error)"
-                    appState.updateState(to: .idle, message: "Transcription failed: \(error.localizedDescription)")
-                }
-            }
-        }
-        
         // Set up hotkey callback
-        hotkeyService.onHotkeyPressed = {
+        HotkeyService.shared.onHotkeyPressed = {
             handleHotkeyPressed()
         }
-        
-        // Validate setup on startup
-        appState.validateSetup()
     }
     
     private func setupHotkey() {
-        if appState.settings.hotkeyEnabled {
-            hotkeyService.registerHotkey(
-                modifiers: appState.settings.hotkeyModifiers,
-                key: appState.settings.hotkeyKey
+        if appState.hotkeyEnabled {
+            HotkeyService.shared.registerHotkey(
+                modifiers: appState.hotkeyModifiers,
+                key: appState.hotkeyKey
             )
         } else {
-            hotkeyService.unregisterHotkey()
+            HotkeyService.shared.unregisterHotkey()
         }
     }
     
     private func handleHotkeyPressed() {
-        // Mark that this was triggered by hotkey
-        appState.wasTriggeredByHotkey = true
-        
         switch appState.currentState {
         case .idle:
             startRecording()
         case .recording:
             stopRecording()
         case .transcribing:
-            // Do nothing while transcribing
             break
         }
     }
     
     private func startRecording() {
         appState.debugInfo = "Debug: Starting recording..."
-        guard appState.settings.isConfigured else {
+        guard appState.isConfigured() else {
             appState.debugInfo = "Debug: Settings not configured"
             appState.showSettings = true
             return
         }
-
+        
         Task {
             do {
-                try await audioService.startRecording()
+                try await AudioService.shared.startRecording()
                 await MainActor.run {
                     appState.debugInfo = "Debug: Recording started successfully"
                 }
@@ -127,25 +83,47 @@ struct ContentView: View {
     private func stopRecording() {
         Task {
             do {
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Stopping recording..."
-                }
-                let audioData = try await audioService.stopRecording()
+                await MainActor.run { appState.updateState(to: .transcribing) }
                 
-                await MainActor.run {
-                    appState.updateState(to: .transcribing)
-                    appState.debugInfo = "Debug: Got \(audioData.count) bytes, transcribing..."
-                }
+                let audioData = try await AudioService.shared.stopRecording()
+                appState.debugInfo = "Debug: Got \(audioData.count) bytes, transcribing..."
                 
-                // Transcribe the audio
-                try await transcriptionService.transcribe(
+                // Get transcription settings from appState on the main actor
+                let (provider, apiKey, model) = await MainActor.run {
+                    let provider = appState.selectedProvider
+                    let apiKey: String
+                    let model: String
+                    switch provider {
+                    case .openAI:
+                        apiKey = appState.openAIAPIKey
+                        model = appState.selectedOpenAIModel
+                    case .gemini:
+                        apiKey = appState.geminiAPIKey
+                        model = appState.selectedGeminiModel
+                    }
+                    return (provider, apiKey, model)
+                }
+
+                let transcribedText = try await CombinedTranscriptionService.shared.transcribe(
                     audioData: audioData,
-                    apiKey: appState.settings.apiKey,
-                    model: appState.settings.selectedModel.rawValue
+                    provider: provider,
+                    apiKey: apiKey,
+                    model: model
                 )
+                
+                appState.debugInfo = "Debug: Got transcription: '\(transcribedText)'"
+                
                 await MainActor.run {
-                    appState.debugInfo = "Debug: Transcription request sent, waiting for response..."
+                    appState.transcribedText = transcribedText
                 }
+                
+                HotkeyService.shared.copyToClipboard(transcribedText)
+                
+                // Short delay before pasting
+                try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                HotkeyService.shared.pasteToActiveWindow()
+                
+                await MainActor.run { appState.updateState(to: .idle) }
                 
             } catch {
                 await MainActor.run {
@@ -158,7 +136,9 @@ struct ContentView: View {
 }
 
 struct MainAppView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
+    var onStartRecording: () -> Void
+    var onStopRecording: () -> Void
     
     var body: some View {
         ZStack {
@@ -196,9 +176,9 @@ struct MainAppView: View {
                     ModernRecordingButton(
                         state: appState.currentState,
                         isRecording: appState.currentState == .recording,
-                        audioLevels: appState.audioLevels,
+                        audioLevels: appState.audioLevelHistory,
                         action: {
-                            handleRecordingButtonTap(appState: appState)
+                            handleRecordingButtonTap()
                         }
                     )
                     
@@ -250,24 +230,34 @@ struct MainAppView: View {
         }
         .frame(minWidth: 450, maxWidth: 600, minHeight: 500, maxHeight: 650)
     }
-    
 
+    private func handleRecordingButtonTap() {
+        switch appState.currentState {
+        case .idle:
+            onStartRecording()
+        case .recording:
+            onStopRecording()
+        case .transcribing:
+            // Do nothing
+            break
+        }
+    }
 }
 
 struct ModernHeaderView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     private var providerAndModelDisplay: String {
         // Ensure we're showing the current provider and model
-        let provider = appState.settings.selectedProvider
-        let isConfigured = appState.settings.isConfigured
+        let provider = appState.selectedProvider
+        let isConfigured = appState.isConfigured()
         
         switch provider {
         case .openAI:
-            let model = appState.settings.selectedModel.displayName
+            let model = appState.selectedOpenAIModel
             return isConfigured ? "Ready: OpenAI \(model)" : "Setup: OpenAI \(model)"
         case .gemini:
-            let model = appState.settings.selectedGeminiModel.displayName
+            let model = appState.selectedGeminiModel
             return isConfigured ? "Ready: Gemini \(model)" : "Setup: Gemini \(model)"
         }
     }
@@ -314,13 +304,13 @@ struct ModernHeaderView: View {
             // Force a refresh of the display when the view appears
             // This ensures the provider display shows the correct information immediately
         }
-        .onChange(of: appState.settings.selectedProvider) { _, _ in
+        .onChange(of: appState.selectedProvider) { _, _ in
             // Force UI update when provider changes
         }
-        .onChange(of: appState.settings.selectedModel) { _, _ in
+        .onChange(of: appState.selectedOpenAIModel) { _, _ in
             // Force UI update when OpenAI model changes
         }
-        .onChange(of: appState.settings.selectedGeminiModel) { _, _ in
+        .onChange(of: appState.selectedGeminiModel) { _, _ in
             // Force UI update when Gemini model changes
         }
     }
@@ -328,65 +318,8 @@ struct ModernHeaderView: View {
 
 
 
-// Helper function to handle recording button tap
-@MainActor
-private func handleRecordingButtonTap(appState: AppStateModel) {
-    switch appState.currentState {
-    case .idle:
-        // Check if API key is configured
-        guard appState.settings.isConfigured else {
-            appState.showSettings = true
-            return
-        }
-        
-        // Mark as NOT triggered by hotkey (button click)
-        appState.wasTriggeredByHotkey = false
-        
-        // Start recording
-        Task {
-            do {
-                try await AudioService.shared.startRecording()
-            } catch {
-                await MainActor.run {
-                    appState.updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
-                }
-            }
-        }
-        
-    case .recording:
-        // Stop recording and transcribe
-        Task {
-            do {
-                let audioData = try await AudioService.shared.stopRecording()
-                
-                await MainActor.run {
-                    appState.updateState(to: .transcribing)
-                }
-                
-                // Transcribe the audio
-                try await TranscriptionService.shared.transcribe(
-                    audioData: audioData,
-                    apiKey: appState.settings.apiKey,
-                    model: appState.settings.selectedModel.rawValue
-                )
-                
-            } catch {
-                await MainActor.run {
-                    appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
-                }
-            }
-        }
-        
-    case .transcribing:
-        // Do nothing while transcribing
-        break
-    }
-}
-
-
-
 struct ModernRecordingButton: View {
-    let state: AppState
+    let state: AppStateValue
     let isRecording: Bool
     let audioLevels: [Float]
     let action: () -> Void
@@ -546,7 +479,7 @@ struct ModernTranscribingContent: View {
 
 struct ModernTranscriptionPanel: View {
     let text: String
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     @State private var animateText = false
     
     var body: some View {
@@ -601,52 +534,43 @@ struct ModernTranscriptionPanel: View {
 }
 
 struct ModernFooterView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
-        if appState.settings.hotkeyEnabled {
+        if appState.hotkeyEnabled {
             HStack(spacing: 12) {
                 // Hotkey label with icon
-                Label("Global Hotkey:", systemImage: "keyboard")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Image(systemName: "keyboard.fill")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("HOTKEY")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.secondary)
                 
                 // Modern hotkey display
-                Text(formatHotkeyDisplay(appState.settings.hotkeyDisplay))
+                Text(appState.hotkeyDisplay)
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.primary.opacity(0.1))
                     )
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.primary.opacity(0.2), lineWidth: 1)
+                    )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.thinMaterial, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
-            .transition(.opacity.combined(with: .scale))
         }
-    }
-    
-    private func formatHotkeyDisplay(_ display: String) -> String {
-        // Convert the display to use proper symbols
-        return display
-            .replacingOccurrences(of: "Cmd", with: "⌘")
-            .replacingOccurrences(of: "Shift", with: "⇧")
-            .replacingOccurrences(of: "Option", with: "⌥")
-            .replacingOccurrences(of: "Control", with: "⌃")
-            .replacingOccurrences(of: "+", with: " ")
     }
 }
 
-#Preview {
-    ContentView(appState: AppStateModel())
-} 
+#if DEBUG
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView(appState: AppState())
+    }
+}
+#endif 

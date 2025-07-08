@@ -92,7 +92,7 @@ struct EnhancedNoiseField {
 }
 
 struct FloatingRecordingView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         ZStack {
@@ -109,7 +109,7 @@ struct FloatingRecordingView: View {
                 // Main visualizer and content
                 switch appState.currentState {
                 case .recording:
-                    RecordingStateView(audioLevels: appState.audioLevels, appState: appState)
+                    RecordingStateView(audioLevels: appState.audioLevelHistory, appState: appState)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     
                 case .transcribing:
@@ -136,7 +136,7 @@ struct FloatingRecordingView: View {
 // MARK: - Recording State View with Data Wave Visualizer
 struct RecordingStateView: View {
     let audioLevels: [Float]
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         VStack(spacing: 24) {
@@ -262,7 +262,7 @@ struct AudioWaveformBar: View {
 
 // MARK: - Transcribing State View
 struct TranscribingStateView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     
     var body: some View {
         VStack(spacing: 24) {

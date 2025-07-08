@@ -32,17 +32,13 @@ class NonFocusingWindow: NSWindow {
 
 @main
 struct WolfWhisperApp: App {
-    @StateObject private var appState = AppStateModel()
+    @StateObject private var appState = AppState()
     @State private var floatingRecordingWindow: NSWindow?
     @State private var floatingWindowDelegate: FloatingWindowDelegate?
     
     var body: some Scene {
         WindowGroup {
-            if appState.isFirstLaunch {
-                OnboardingView(appState: appState)
-            } else {
-                ContentView(appState: appState)
-            }
+            ContentView(appState: appState)
         }
         .windowResizability(.contentSize)
         .commands {
@@ -53,7 +49,7 @@ struct WolfWhisperApp: App {
         .onChange(of: appState.currentState) { _, newValue in
             handleStateChange(newValue)
         }
-        .onChange(of: appState.settings.launchAtLogin) { _, newValue in
+        .onChange(of: appState.launchAtLogin) { _, newValue in
             handleLaunchAtLoginChange(newValue)
         }
         
@@ -73,7 +69,7 @@ struct WolfWhisperApp: App {
         .menuBarExtraStyle(.window)
     }
     
-    private func handleStateChange(_ newState: AppState) {
+    private func handleStateChange(_ newState: AppStateValue) {
         // Show floating window for ALL recording sessions (both hotkey and button)
         if newState == .recording || newState == .transcribing {
             showFloatingRecordingWindow()
@@ -167,9 +163,9 @@ struct WolfWhisperApp: App {
 }
 
 class FloatingWindowDelegate: NSObject, NSWindowDelegate {
-    let appState: AppStateModel
+    let appState: AppState
     
-    init(appState: AppStateModel) {
+    init(appState: AppState) {
         self.appState = appState
     }
     
@@ -194,12 +190,12 @@ struct SettingsMenuButton: View {
 }
 
 struct MenuBarView: View {
-    @ObservedObject var appState: AppStateModel
+    @ObservedObject var appState: AppState
     @Environment(\.openWindow) private var openWindow
     
     var body: some View {
         // Only show menu if the setting is enabled
-        if appState.settings.showInMenuBar {
+        if appState.showInMenuBar {
             VStack(alignment: .leading, spacing: 8) {
                 // Status
                 HStack {
@@ -216,12 +212,21 @@ struct MenuBarView: View {
                 
                 // Quick Actions
                 Button("Start Recording") {
-                    // Trigger recording
+                    // This logic is simplified and might need to be expanded
+                    // to be identical to ContentView's start/stop logic.
                     Task {
-                        await appState.startRecording()
+                        if appState.currentState == .idle {
+                            try? await AudioService.shared.startRecording()
+                        } else if appState.currentState == .recording {
+                            // This part is tricky because stopRecording in ContentView
+                            // triggers transcription. A refactor might be needed for
+                            // perfect consistency. For now, we stop it.
+                            _ = try? await AudioService.shared.stopRecording()
+                            appState.updateState(to: .idle)
+                        }
                     }
                 }
-                .disabled(appState.currentState != .idle)
+                .disabled(appState.currentState == .transcribing)
                 
                 Button("Settings...") {
                     openWindow(id: "settings")
