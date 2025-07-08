@@ -28,7 +28,7 @@ struct WaveformView: View {
                 startAnimation()
             }
         }
-        .onChange(of: isRecording) { recording in
+        .onChange(of: isRecording) { _, recording in
             if recording {
                 startAnimation()
             }
@@ -86,10 +86,10 @@ struct WaveformBar: View {
             .onAppear {
                 updateHeight()
             }
-            .onChange(of: height) { _ in
+            .onChange(of: height) { _, _ in
                 updateHeight()
             }
-            .onChange(of: isRecording) { recording in
+            .onChange(of: isRecording) { _, recording in
                 opacity = recording ? 1.0 : 0.3
             }
     }
@@ -156,7 +156,7 @@ struct RecordingButton: View {
         .onAppear {
             startPulseAnimation()
         }
-        .onChange(of: isRecording) { recording in
+        .onChange(of: isRecording) { _, recording in
             if recording {
                 startPulseAnimation()
             }
