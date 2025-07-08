@@ -77,6 +77,13 @@ struct ContentView: View {
     
     private func setupHotkey() {
         if appState.settings.hotkeyEnabled {
+            // Check for accessibility permissions before registering hotkey
+            if !hotkeyService.hasAccessibilityPermissions() {
+                print("🔐 Requesting accessibility permissions for hotkey functionality...")
+                hotkeyService.requestAccessibilityPermissions()
+                // Still register the hotkey - it will work once permissions are granted
+            }
+            
             hotkeyService.registerHotkey(
                 modifiers: appState.settings.hotkeyModifiers,
                 key: appState.settings.hotkeyKey

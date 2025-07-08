@@ -421,6 +421,10 @@ class AppStateModel: ObservableObject {
         // 3. Check accessibility permissions (for hotkeys)
         if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
             missingRequirements.append("Accessibility Access")
+            // Proactively request accessibility permissions
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestAccessibilityPermission()
+            }
         }
         
         if !missingRequirements.isEmpty {
@@ -450,8 +454,11 @@ class AppStateModel: ObservableObject {
     }
     
     func requestAccessibilityPermission() {
-        // Open System Preferences to Accessibility settings
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        // Open System Settings to Accessibility settings (macOS 13+)
+        Task { @MainActor in
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 } 
