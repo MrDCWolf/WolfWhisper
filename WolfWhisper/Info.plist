@@ -22,5 +22,7 @@
 	<string>public.app-category.utilities</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>WolfWhisper needs microphone access to record your voice for dictation.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>WolfWhisper needs accessibility permissions to paste transcribed text into other applications.</string>
 </dict>
 </plist>
