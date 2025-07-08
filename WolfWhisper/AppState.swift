@@ -215,11 +215,13 @@ class SettingsModel: ObservableObject {
         savePanel.allowedContentTypes = [.plainText]
         
         savePanel.begin { response in
-            if response == .OK, let url = savePanel.url {
-                do {
-                    try debugInfo.write(to: url, atomically: true, encoding: .utf8)
-                } catch {
-                    print("Failed to export debug log: \(error)")
+            Task { @MainActor in
+                if response == .OK, let url = savePanel.url {
+                    do {
+                        try debugInfo.write(to: url, atomically: true, encoding: .utf8)
+                    } catch {
+                        print("Failed to export debug log: \(error)")
+                    }
                 }
             }
         }
