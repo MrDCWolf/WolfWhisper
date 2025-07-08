@@ -20,5 +20,7 @@
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>WolfWhisper needs microphone access to record your voice for dictation.</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>
