@@ -317,10 +317,10 @@ class AppStateModel: ObservableObject {
             missingRequirements.append("Microphone Access")
         }
         
-        // 3. Check accessibility permissions (for hotkeys)
-        if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
-            missingRequirements.append("Accessibility Access")
-        }
+        // 3. Check accessibility permissions (for hotkeys) - DISABLED
+        // if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
+        //     missingRequirements.append("Accessibility Access")
+        // }
         
         if !missingRequirements.isEmpty {
             needsSetup = true

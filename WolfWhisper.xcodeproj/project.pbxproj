@@ -166,9 +166,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				COMBINE_HIDPI_IMAGES = YES;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZT6QMA463J;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WolkWhisper;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -303,9 +306,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				COMBINE_HIDPI_IMAGES = YES;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZT6QMA463J;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WolkWhisper;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -339,8 +345,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-
 	};
 	rootObject = FA52D495A285247D479A3A88 /* Project object */;
 }

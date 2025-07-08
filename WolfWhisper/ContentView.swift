@@ -208,33 +208,7 @@ struct MainAppView: View {
                         .transition(.opacity.combined(with: .scale))
                         .animation(.easeInOut(duration: 0.3), value: appState.statusText)
                     
-                    // Show accessibility permission button if needed
-                    if appState.statusText.contains("Accessibility Access") {
-                        Button(action: {
-                            appState.requestAccessibilityPermission()
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "hand.raised.fill")
-                                    .font(.system(size: 14, weight: .medium))
-                                Text("Grant Accessibility Permission")
-                                    .font(.system(size: 14, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(LinearGradient(
-                                        gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ))
-                            )
-                            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .transition(.opacity.combined(with: .scale))
-                    }
+                    // Accessibility permission button removed - no longer needed
                 }
                 
                 // Modern Transcription Panel
