@@ -1,6 +1,7 @@
 import Foundation
-@preconcurrency import Carbon
-import Cocoa
+import Carbon
+@preconcurrency import ApplicationServices
+import AppKit
 
 @MainActor
 class HotkeyService: ObservableObject {
@@ -173,14 +174,50 @@ extension HotkeyService {
         pasteboard.setString(text, forType: .string)
     }
     
+    private func hasAccessibilityPermissions() -> Bool {
+        return AXIsProcessTrusted()
+    }
+    
+    private func requestAccessibilityPermissions() -> Bool {
+        // This function needs to be synchronous to return a value, so we can't use `DispatchQueue.main.async` directly
+        // However, since this is called from `pasteToActiveWindow` which should be on the main thread (event handling),
+        // we can assume it's safe. If not, we'll need to refactor to use a completion handler or async/await.
+        
+        // Create options dictionary with prompt
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        
+        // Check if we're already trusted
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        
+        if !trusted {
+            // Attempt a real accessibility action to trigger the system to add the app to the list
+            // We'll do this on the main thread just in case
+            DispatchQueue.main.async {
+                let source = CGEventSource(stateID: .hidSystemState)
+                let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+                cmdVDown?.flags = .maskCommand
+                let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+                cmdVUp?.flags = .maskCommand
+                
+                // Post the events - this will trigger the system dialog
+                cmdVDown?.post(tap: .cghidEventTap)
+                cmdVUp?.post(tap: .cghidEventTap)
+            }
+        }
+        
+        return trusted
+    }
+    
     func pasteToActiveWindow() {
         print("Attempting to paste to active window...")
         
-        // Check if we have accessibility permissions
+        // Check if we have accessibility permissions and request if needed
         if !hasAccessibilityPermissions() {
             print("No accessibility permissions - requesting...")
-            requestAccessibilityPermissions()
-            return
+            if !requestAccessibilityPermissions() {
+                print("Failed to get accessibility permissions")
+                return
+            }
         }
         
         // Simulate Cmd+V to paste
@@ -208,15 +245,5 @@ extension HotkeyService {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.pasteToActiveWindow()
         }
-    }
-    
-    // Check if we have accessibility permissions for text insertion
-    func hasAccessibilityPermissions() -> Bool {
-        return AXIsProcessTrusted()
-    }
-    
-    func requestAccessibilityPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
     }
 } 

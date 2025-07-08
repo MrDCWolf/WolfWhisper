@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
-import ApplicationServices
 import AVFoundation
+@preconcurrency import ApplicationServices
 import AppKit
 import UniformTypeIdentifiers
 import Combine
@@ -310,15 +310,28 @@ class SettingsModel: ObservableObject {
             }
         }
         
-        // Check accessibility permission
-        let hasAccessibility = AXIsProcessTrusted()
-        if !hasAccessibility {
-            // Open System Preferences to Security & Privacy
-            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-            NSWorkspace.shared.open(url)
+        // Check accessibility permission on the main thread
+        DispatchQueue.main.async {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            let trusted = AXIsProcessTrustedWithOptions(options)
+            
+            if !trusted {
+                // Attempt a real accessibility action to trigger the system to add the app to the list
+                let source = CGEventSource(stateID: .hidSystemState)
+                let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+                cmdVDown?.flags = .maskCommand
+                let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+                cmdVUp?.flags = .maskCommand
+                
+                // Post the events - this will trigger the system dialog
+                cmdVDown?.post(tap: .cghidEventTap)
+                cmdVUp?.post(tap: .cghidEventTap)
+                
+                print("Accessibility permission: requesting with real action")
+            } else {
+                print("Accessibility permission: already granted")
+            }
         }
-        
-        print("Accessibility permission: \(hasAccessibility ? "granted" : "denied - opening System Preferences")")
     }
 }
 

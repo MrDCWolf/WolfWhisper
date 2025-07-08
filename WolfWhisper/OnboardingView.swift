@@ -355,7 +355,7 @@ struct PermissionsSetupView: View {
     
     private func checkPermissions() {
         microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
-        // TODO: Check accessibility permission
+        accessibilityPermission = AXIsProcessTrusted()
     }
     
     private func requestMicrophonePermission() {
@@ -368,20 +368,33 @@ struct PermissionsSetupView: View {
     }
     
     private func requestAccessibilityPermission() {
-        // First, make a request to trigger the app to appear in accessibility settings
-        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
-        
-        // Then open System Preferences to Accessibility settings
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
+        // Run on main thread to be safe
+        DispatchQueue.main.async {
+            // Create options dictionary with prompt
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            
+            // Check if we're already trusted
+            let trusted = AXIsProcessTrustedWithOptions(options)
+            
+            if !trusted {
+                // Attempt a real accessibility action to trigger the system to add the app to the list
+                let source = CGEventSource(stateID: .hidSystemState)
+                let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+                cmdVDown?.flags = .maskCommand
+                let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+                cmdVUp?.flags = .maskCommand
+                
+                // Post the events - this will trigger the system dialog
+                cmdVDown?.post(tap: .cghidEventTap)
+                cmdVUp?.post(tap: .cghidEventTap)
+                
+                // Update the permission status after a delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.accessibilityPermission = AXIsProcessTrusted()
+                }
+            } else {
+                self.accessibilityPermission = true
             }
-        }
-        
-        // Update the permission status after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            checkPermissions()
         }
     }
 }
