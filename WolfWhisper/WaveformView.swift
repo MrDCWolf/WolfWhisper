@@ -224,7 +224,7 @@ struct TranscribingButtonContent: View {
     
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: "brain.head.profile")
+            Image(systemName: "text.quote")
                 .font(.system(size: 24, weight: .medium))
                 .foregroundColor(.white)
                 .rotationEffect(.degrees(rotationAngle))

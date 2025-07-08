@@ -153,25 +153,7 @@ struct RecordingStateView: View {
                     AnimatedEllipsis()
                 }
                 
-                // AI Smart indicator if enabled
-                if appState.settings.aiSmartCleanupEnabled {
-                    HStack(spacing: 4) {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.blue)
-                        Text("+SmartAI")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.blue)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.blue.opacity(0.1))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(.blue.opacity(0.3), lineWidth: 1)
-                    )
-                }
+
                 
                 // Instructional text
                 Text("Press hotkey again to stop")
@@ -300,27 +282,10 @@ struct TranscribingStateView: View {
                         Spacer()
                     }
                     
-                    if appState.settings.aiSmartCleanupEnabled {
-                        HStack(spacing: 8) {
-                            if appState.statusText.contains("AI Smart") {
-                                // Currently processing AI Smart
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .progressViewStyle(CircularProgressViewStyle())
-                            } else {
-                                Image(systemName: "arrow.right.circle")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.blue)
-                            }
-                            Text("+SmartAI")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(appState.statusText.contains("AI Smart") ? .blue : .secondary)
-                            Spacer()
-                        }
-                    }
+
                 }
                 
-                Text(appState.statusText.contains("AI Smart") ? "Applying AI Smart cleanup..." : "Please wait...")
+                Text("Please wait...")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

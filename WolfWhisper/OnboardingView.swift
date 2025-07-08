@@ -210,11 +210,11 @@ struct ModelSelectionView: View {
     var body: some View {
         VStack(spacing: 30) {
             VStack(spacing: 16) {
-                Image(systemName: "brain.head.profile")
+                Image(systemName: "gear.badge.checkmark")
                     .font(.system(size: 60))
                     .foregroundColor(.blue)
                 
-                Text("Choose AI Model")
+                Text("Choose Model")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                 

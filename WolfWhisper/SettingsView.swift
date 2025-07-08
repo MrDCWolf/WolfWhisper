@@ -87,28 +87,84 @@ struct ModernGeneralSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                ModernSettingsSection(title: "API Configuration") {
+                ModernSettingsSection(title: "Transcription Provider") {
                     VStack(alignment: .leading, spacing: 16) {
                         ModernSettingsField(
-                            title: "OpenAI API Key",
-                            description: "Your API key is stored securely in the Keychain"
+                            title: "Provider",
+                            description: settings.selectedProvider.description
                         ) {
-                            SecureField("sk-...", text: $settings.apiKey)
-                                .textFieldStyle(ModernTextFieldStyle())
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        
-                        ModernSettingsField(
-                            title: "Whisper Model",
-                            description: settings.selectedModel.description
-                        ) {
-                            Picker("Model", selection: $settings.selectedModel) {
-                                ForEach(WhisperModel.allCases, id: \.self) { model in
-                                    Text(model.displayName).tag(model)
+                            Picker("Provider", selection: $settings.selectedProvider) {
+                                ForEach(TranscriptionProvider.allCases, id: \.self) { provider in
+                                    Text(provider.displayName).tag(provider)
                                 }
                             }
                             .pickerStyle(MenuPickerStyle())
                             .tint(.primary)
+                            .onChange(of: settings.selectedProvider) { _, _ in
+                                settings.saveSettings()
+                            }
+                        }
+                        
+                        // OpenAI Configuration
+                        if settings.selectedProvider == .openAI {
+                            ModernSettingsField(
+                                title: "OpenAI API Key",
+                                description: "Your API key is stored securely in the Keychain"
+                            ) {
+                                SecureField("sk-...", text: $settings.apiKey)
+                                    .textFieldStyle(ModernTextFieldStyle())
+                                    .font(.system(.body, design: .monospaced))
+                                    .onChange(of: settings.apiKey) { _, _ in
+                                        settings.saveSettings()
+                                    }
+                            }
+                            
+                            ModernSettingsField(
+                                title: "Whisper Model",
+                                description: settings.selectedModel.description
+                            ) {
+                                Picker("Model", selection: $settings.selectedModel) {
+                                    ForEach(WhisperModel.allCases, id: \.self) { model in
+                                        Text(model.displayName).tag(model)
+                                    }
+                                }
+                                .pickerStyle(MenuPickerStyle())
+                                .tint(.primary)
+                                .onChange(of: settings.selectedModel) { _, _ in
+                                    settings.saveSettings()
+                                }
+                            }
+                        }
+                        
+                        // Gemini Configuration
+                        if settings.selectedProvider == .gemini {
+                            ModernSettingsField(
+                                title: "Google AI API Key",
+                                description: "Your API key is stored securely in the Keychain"
+                            ) {
+                                SecureField("AIza...", text: $settings.geminiApiKey)
+                                    .textFieldStyle(ModernTextFieldStyle())
+                                    .font(.system(.body, design: .monospaced))
+                                    .onChange(of: settings.geminiApiKey) { _, _ in
+                                        settings.saveSettings()
+                                    }
+                            }
+                            
+                            ModernSettingsField(
+                                title: "Gemini Model",
+                                description: settings.selectedGeminiModel.description
+                            ) {
+                                Picker("Model", selection: $settings.selectedGeminiModel) {
+                                    ForEach(GeminiModel.allCases, id: \.self) { model in
+                                        Text(model.displayName).tag(model)
+                                    }
+                                }
+                                .pickerStyle(MenuPickerStyle())
+                                .tint(.primary)
+                                .onChange(of: settings.selectedGeminiModel) { _, _ in
+                                    settings.saveSettings()
+                                }
+                            }
                         }
                     }
                 }
@@ -123,11 +179,6 @@ struct ModernGeneralSettingsView: View {
                         ModernToggle(
                             title: "Launch at login",
                             isOn: $settings.launchAtLogin
-                        )
-                        
-                        ModernToggle(
-                            title: "AI Smart cleanup",
-                            isOn: $settings.aiSmartCleanupEnabled
                         )
                     }
                 }
