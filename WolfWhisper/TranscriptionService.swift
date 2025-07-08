@@ -58,8 +58,19 @@ class TranscriptionService: ObservableObject {
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
         
-        // Add prompt parameter for better transcription quality
-        let transcriptionPrompt = "Please provide a clean, well-formatted transcription with proper grammar, punctuation, and capitalization. Remove filler words like 'um', 'uh', 'ah', and stutters. Format as clear, professional text."
+        // Add prompt parameter for enhanced transcription quality with cleanup
+        let transcriptionPrompt = """
+        Please provide a clean, professional transcription with the following enhancements:
+        
+        1. GRAMMAR: Fix grammatical errors and ensure proper sentence structure while preserving the speaker's intended meaning.
+        2. FILLER WORDS: Remove all filler words and sounds including 'um', 'uh', 'ah', 'er', 'like', 'you know', 'so', and similar verbal hesitations.
+        3. STUTTERS: Remove stutters and repeated words (e.g., "I I I think" becomes "I think").
+        4. PUNCTUATION: Add proper punctuation including periods, commas, question marks, and exclamation points based on context and intonation.
+        5. CAPITALIZATION: Use proper capitalization for sentences, proper nouns, and acronyms.
+        6. FORMATTING: Present as clear, readable text that flows naturally.
+        
+        Maintain the speaker's original intent and meaning while making the text professional and polished.
+        """
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"prompt\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(transcriptionPrompt)\r\n".data(using: .utf8)!)
