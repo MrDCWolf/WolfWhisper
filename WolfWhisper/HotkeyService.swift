@@ -216,7 +216,19 @@ extension HotkeyService {
     }
     
     func requestAccessibilityPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        print("🔐 Requesting accessibility permissions...")
+        DispatchQueue.main.async {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            let result = AXIsProcessTrustedWithOptions(options)
+            print("🔐 Accessibility permission request result: \(result)")
+            
+            if !result {
+                print("🔐 Permission not granted, opening System Settings...")
+                // Also open System Settings as fallback
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
 } 

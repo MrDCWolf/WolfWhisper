@@ -421,9 +421,9 @@ class AppStateModel: ObservableObject {
         // 3. Check accessibility permissions (for hotkeys)
         if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
             missingRequirements.append("Accessibility Access")
-            // Proactively request accessibility permissions
+            // Proactively request accessibility permissions using HotkeyService
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                self.requestAccessibilityPermission()
+                HotkeyService.shared.requestAccessibilityPermissions()
             }
         }
         
