@@ -317,10 +317,8 @@ class AppStateModel: ObservableObject {
             missingRequirements.append("Microphone Access")
         }
         
-        // 3. Check accessibility permissions (for hotkeys) - DISABLED
-        // if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
-        //     missingRequirements.append("Accessibility Access")
-        // }
+        // 3. Accessibility permissions are handled on-demand in HotkeyService
+        // No need to validate upfront - user will be prompted when they try to paste
         
         if !missingRequirements.isEmpty {
             needsSetup = true
