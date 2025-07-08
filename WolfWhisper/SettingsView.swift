@@ -407,10 +407,10 @@ struct ModernAdvancedSettingsView: View {
                             .background(.white.opacity(0.2))
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Link("View on GitHub", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper")!)
+                            Link("View on GitHub", destination: URL(string: "https://github.com/YOUR_USERNAME/WolfWhisper")!)
                                 .font(.system(size: 16, weight: .medium))
                             
-                            Link("Report Issue", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper/issues")!)
+                            Link("Report Issue", destination: URL(string: "https://github.com/YOUR_USERNAME/WolfWhisper/issues")!)
                                 .font(.system(size: 16, weight: .medium))
                         }
                     }
