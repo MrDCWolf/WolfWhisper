@@ -188,6 +188,7 @@ struct SettingsMenuButton: View {
     var body: some View {
         Button("Settings...") {
             print("DEBUG: Settings menu item clicked")
+            NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "settings")
         }
         .keyboardShortcut(",", modifiers: .command)
@@ -199,44 +200,108 @@ struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     
     var body: some View {
-        // Only show menu if the setting is enabled
         if appState.settings.showInMenuBar {
-            VStack(alignment: .leading, spacing: 8) {
-                // Status
-                HStack {
-                    Image(systemName: "mic.circle.fill")
-                        .foregroundColor(.blue)
-                    Text(appState.statusText)
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
+            ZStack {
+                // Glassmorphic background
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
                 
-                Divider()
-                
-                // Quick Actions
-                Button("Start Recording") {
-                    // Trigger recording
-                    Task {
-                        await appState.startRecording()
+                VStack(alignment: .leading, spacing: 0) {
+                    // Status header
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.18))
+                                .frame(width: 28, height: 28)
+                            Image(systemName: "mic.circle.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.blue)
+                        }
+                        Text(appState.statusText)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer()
                     }
-                }
-                .disabled(appState.currentState != .idle)
-                
-                Button("Settings...") {
-                    openWindow(id: "settings")
-                }
-                
-                Divider()
-                
-                Button("Quit WolfWhisper") {
-                    NSApplication.shared.terminate(nil)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 8)
+                    
+                    // Optional: Compact waveform when recording
+                    if appState.currentState == .recording {
+                        CompactWaveformView(audioLevels: appState.audioLevels, isRecording: true)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                    }
+                    
+                    Divider().background(Color.white.opacity(0.15)).padding(.horizontal, 8)
+                        .padding(.bottom, 2)
+                    
+                    // Quick Actions
+                    VStack(spacing: 0) {
+                        if appState.currentState == .recording {
+                            MenuBarActionButton(
+                                title: "Stop Recording",
+                                systemImage: "stop.circle",
+                                isEnabled: true,
+                                action: {
+                                    Task {
+                                        do {
+                                            let audioData = try await AudioService.shared.stopRecording()
+                                            await MainActor.run {
+                                                appState.updateState(to: .transcribing)
+                                            }
+                                            // Transcribe the audio
+                                            try await TranscriptionService.shared.transcribe(
+                                                audioData: audioData,
+                                                apiKey: appState.settings.apiKey,
+                                                model: appState.settings.selectedModel.rawValue
+                                            )
+                                        } catch {
+                                            await MainActor.run {
+                                                appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        } else {
+                            MenuBarActionButton(
+                                title: "Start Recording (\(appState.settings.hotkeyDisplay))",
+                                systemImage: "record.circle",
+                                isEnabled: appState.currentState == .idle,
+                                action: {
+                                    Task { 
+                                        await appState.startRecordingFromMenuBar() 
+                                    }
+                                }
+                            )
+                        }
+                        // Open Settings
+                        MenuBarActionButton(
+                            title: "Settings",
+                            systemImage: "gearshape.fill",
+                            isEnabled: true,
+                            action: {
+                                NSApp.activate(ignoringOtherApps: true)
+                                openWindow(id: "settings")
+                            }
+                        )
+                        MenuBarActionButton(
+                            title: "Quit WolfWhisper",
+                            systemImage: "power",
+                            isEnabled: true,
+                            action: { NSApplication.shared.terminate(nil) }
+                        )
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
             }
-            .padding(.bottom, 8)
-            .frame(width: 200)
+            .frame(width: 240)
+            .padding(6)
         } else {
-            // Show a minimal view when menu bar is disabled
             VStack {
                 Text("Menu bar disabled")
                     .font(.caption)
@@ -248,5 +313,36 @@ struct MenuBarView: View {
             .padding(8)
             .frame(width: 150)
         }
+    }
+}
+
+// Modern action button for menu bar
+struct MenuBarActionButton: View {
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(isEnabled ? .blue : .gray)
+                Text(title)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(isEnabled ? .primary : .gray)
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isEnabled ? Color.blue.opacity(0.08) : Color.gray.opacity(0.05))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled)
+        .padding(.vertical, 2)
     }
 } 

@@ -38,32 +38,61 @@ struct ContentView: View {
         transcriptionService.onTranscriptionComplete = { result in
             Task { @MainActor in
                 appState.debugInfo = "Debug: Transcription callback called!"
+                NSLog("DEBUG: ==================== TRANSCRIPTION CALLBACK ====================")
+                NSLog("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
+                
                 switch result {
                 case .success(let text):
                     appState.debugInfo = "Debug: Got transcription: '\(text)' (length: \(text.count))"
-                    appState.setTranscribedText(text)
+                    NSLog("DEBUG: Got transcription: '\(text)' (length: \(text.count))")
+                    
+                    // Always update the main app UI to show the transcription
                     appState.updateState(to: .idle)
+                    appState.setTranscribedText(text)
                     
                     // Always copy to clipboard
-                    hotkeyService.copyToClipboard(text)
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(text, forType: .string)
+                    NSLog("DEBUG: Text copied to clipboard")
                     
-                    // If triggered by hotkey, paste after a delay to ensure proper focus
-                    if appState.wasTriggeredByHotkey {
-                        // Delay pasting to allow floating window to close and focus to return
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            hotkeyService.pasteToActiveWindow()
+                    if appState.wasRecordingStartedByHotkey {
+                        NSLog("DEBUG: ===== HOTKEY RECORDING PATH =====")
+                        NSLog("DEBUG: Showing in main app (background) and pasting to active window")
+                        
+                        // For hotkey recordings, also paste to the active window
+                        if !AXIsProcessTrusted() {
+                            NSLog("DEBUG: No accessibility permission - requesting...")
                             
-                            // Reset the flag after pasting is complete
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                appState.wasTriggeredByHotkey = false
+                            let alert = NSAlert()
+                            alert.messageText = "Accessibility Permission Required"
+                            alert.informativeText = "WolfWhisper needs accessibility permission to paste text to other applications. Please grant permission in System Preferences."
+                            alert.addButton(withTitle: "Open System Preferences")
+                            alert.addButton(withTitle: "Cancel")
+                            
+                            let response = alert.runModal()
+                            if response == .alertFirstButtonReturn {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                    NSWorkspace.shared.open(url)
+                                }
                             }
+                        } else {
+                            NSLog("DEBUG: Accessibility permission granted, pasting to active window")
+                            hotkeyService.pasteToActiveWindow()
                         }
+                    } else {
+                        NSLog("DEBUG: ===== MANUAL RECORDING PATH =====")
+                        NSLog("DEBUG: Showing in main app only")
                     }
                     
                 case .failure(let error):
-                    appState.debugInfo = "Debug: Transcription failed: \(error)"
-                    appState.updateState(to: .idle, message: "Transcription failed: \(error.localizedDescription)")
+                    appState.debugInfo = "Debug: Transcription failed: \(error.localizedDescription)"
+                    NSLog("DEBUG: Transcription failed: \(error.localizedDescription)")
+                    appState.updateState(to: .idle, message: "Error: \(error.localizedDescription)")
                 }
+                
+                NSLog("DEBUG: Resetting wasRecordingStartedByHotkey flag")
+                appState.wasRecordingStartedByHotkey = false
             }
         }
         
@@ -77,6 +106,9 @@ struct ContentView: View {
     }
     
     private func setupHotkey() {
+        NSLog("🔧 DEBUG: setupHotkey called - enabled: \(appState.settings.hotkeyEnabled)")
+        NSLog("🔧 DEBUG: Hotkey modifiers: \(appState.settings.hotkeyModifiers), key: \(appState.settings.hotkeyKey)")
+        
         if appState.settings.hotkeyEnabled {
             hotkeyService.registerHotkey(
                 modifiers: appState.settings.hotkeyModifiers,
@@ -88,21 +120,32 @@ struct ContentView: View {
     }
     
     private func handleHotkeyPressed() {
-        // Mark that this was triggered by hotkey
-        appState.wasTriggeredByHotkey = true
+        NSLog("🔥 DEBUG: ==================== HOTKEY PRESSED ====================")
+        NSLog("🔥 DEBUG: Current state: \(appState.currentState)")
+        NSLog("🔥 DEBUG: Setting wasRecordingStartedByHotkey = true")
         
-        switch appState.currentState {
-        case .idle:
+        // Set the flag to indicate this recording was started by hotkey
+        appState.wasRecordingStartedByHotkey = true
+        
+        NSLog("🔥 DEBUG: Flag set, current state: \(appState.currentState)")
+        
+        if appState.currentState == .idle {
+            NSLog("🔥 DEBUG: State is idle, starting recording...")
             startRecording()
-        case .recording:
+        } else if appState.currentState == .recording {
+            NSLog("🔥 DEBUG: State is recording, stopping recording...")
             stopRecording()
-        case .transcribing:
-            // Do nothing while transcribing
-            break
+        } else {
+            NSLog("🔥 DEBUG: State is \(appState.currentState), no action taken")
         }
+        
+        NSLog("🔥 DEBUG: handleHotkeyPressed completed")
     }
     
     private func startRecording() {
+        print("DEBUG: startRecording called")
+        print("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
+        
         appState.debugInfo = "Debug: Starting recording..."
         guard appState.settings.isConfigured else {
             appState.debugInfo = "Debug: Settings not configured"
@@ -115,6 +158,7 @@ struct ContentView: View {
                 try await audioService.startRecording()
                 await MainActor.run {
                     appState.debugInfo = "Debug: Recording started successfully"
+                    print("DEBUG: Recording started successfully, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
                 }
             } catch {
                 await MainActor.run {
@@ -126,16 +170,21 @@ struct ContentView: View {
     }
     
     private func stopRecording() {
+        print("DEBUG: stopRecording called")
+        print("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
+        
         Task {
             do {
                 await MainActor.run {
                     appState.debugInfo = "Debug: Stopping recording..."
+                    print("DEBUG: About to stop recording, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
                 }
                 let audioData = try await audioService.stopRecording()
                 
                 await MainActor.run {
                     appState.updateState(to: .transcribing)
                     appState.debugInfo = "Debug: Got \(audioData.count) bytes, transcribing..."
+                    print("DEBUG: Got audio data, starting transcription, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
                 }
                 
                 // Transcribe the audio
@@ -146,6 +195,7 @@ struct ContentView: View {
                 )
                 await MainActor.run {
                     appState.debugInfo = "Debug: Transcription request sent, waiting for response..."
+                    print("DEBUG: Transcription request sent, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
                 }
                 
             } catch {
@@ -272,6 +322,7 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
         
         // Mark as NOT triggered by hotkey (button click)
         appState.wasTriggeredByHotkey = false
+        appState.wasRecordingStartedByHotkey = false
         
         // Start recording
         Task {

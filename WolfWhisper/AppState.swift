@@ -152,7 +152,7 @@ class SettingsModel: ObservableObject {
         
         info.append("WolfWhisper Debug Log")
         info.append("Generated: \(Date())")
-        info.append("Version: 1.4.0")
+        info.append("Version: 1.1")
         info.append("")
         
         info.append("=== Settings ===")
@@ -249,6 +249,7 @@ class AppStateModel: ObservableObject {
     @Published var transcribedText: String = ""
     @Published var audioLevels: [Float] = []
     @Published var wasTriggeredByHotkey: Bool = false
+    @Published var wasRecordingStartedByHotkey: Bool = false
     @Published var needsSetup: Bool = false
     @Published var debugInfo: String = "Debug: No transcription yet"
     
@@ -345,9 +346,39 @@ class AppStateModel: ObservableObject {
     }
     
     func startRecording() async {
-        // This will be called from menu bar - delegate to audio service
-        updateState(to: .recording)
-        // The actual recording logic should be handled by ContentView or AudioService
+        // This will be called from menu bar or main window
+        // DO NOT modify wasRecordingStartedByHotkey here - it should be set by the caller
+        guard settings.isConfigured else {
+            await MainActor.run {
+                debugInfo = "Debug: Settings not configured"
+                showSettings = true
+            }
+            return
+        }
+        await MainActor.run {
+            updateState(to: .recording)
+            debugInfo = "Debug: Starting recording..."
+        }
+        do {
+            try await AudioService.shared.startRecording()
+            await MainActor.run {
+                debugInfo = "Debug: Recording started successfully"
+            }
+        } catch {
+            await MainActor.run {
+                debugInfo = "Debug: Recording failed: \(error)"
+                updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func startRecordingFromMenuBar() async {
+        // Explicitly mark as NOT started by hotkey
+        await MainActor.run {
+            wasRecordingStartedByHotkey = false
+            wasTriggeredByHotkey = false
+        }
+        await startRecording()
     }
     
     func requestAccessibilityPermission() {

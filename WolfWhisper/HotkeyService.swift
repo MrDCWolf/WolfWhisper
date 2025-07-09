@@ -16,7 +16,7 @@ class HotkeyService: ObservableObject {
     private init() {}
     
     func registerHotkey(modifiers: UInt, key: UInt16) {
-        print("🔧 HotkeyService.registerHotkey called with modifiers: \(modifiers), key: \(key)")
+        NSLog("🔧 HotkeyService.registerHotkey called with modifiers: \(modifiers), key: \(key)")
         
         // Unregister existing hotkey first
         unregisterHotkey()
@@ -24,7 +24,7 @@ class HotkeyService: ObservableObject {
         let keyCode = Int(key)
         let carbonModifiers = carbonModifiersFromFlags(modifiers)
         
-        print("🔧 Converted to keyCode: \(keyCode), carbonModifiers: \(carbonModifiers)")
+        NSLog("🔧 Converted to keyCode: \(keyCode), carbonModifiers: \(carbonModifiers)")
         
         // Register the hotkey
         let hotKeyID = EventHotKeyID(signature: fourCharCodeFrom("WLFW"), id: 1)
@@ -41,9 +41,9 @@ class HotkeyService: ObservableObject {
         if status == noErr {
             isRegistered = true
             setupEventHandler()
-            print("✅ Hotkey registered successfully with modifiers: \(modifiers), key: \(key)")
+            NSLog("✅ Hotkey registered successfully with modifiers: \(modifiers), key: \(key)")
         } else {
-            print("❌ Failed to register hotkey: \(status) (modifiers: \(modifiers), key: \(key))")
+            NSLog("❌ Failed to register hotkey: \(status) (modifiers: \(modifiers), key: \(key))")
         }
     }
     
@@ -67,35 +67,40 @@ class HotkeyService: ObservableObject {
     }
     
     private func setupEventHandler() {
-        let eventTypes = [
-            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
-        ]
+        NSLog("🔧 Setting up event handler...")
+        
+        var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
         
         let callback: EventHandlerProcPtr = { (nextHandler, theEvent, userData) -> OSStatus in
-            print("🔥 Hotkey event received!")
+            NSLog("🔥 HOTKEY EVENT TRIGGERED!")
             
-            // Get the HotkeyService instance from userData
-            let hotkeyService = Unmanaged<HotkeyService>.fromOpaque(userData!).takeUnretainedValue()
+            // Get the hotkey ID
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(theEvent, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
             
-            // Trigger the callback on the main thread
-            DispatchQueue.main.async {
-                print("🔥 Calling hotkey callback...")
-                hotkeyService.onHotkeyPressed?()
+            if status == noErr {
+                NSLog("🔥 Hotkey ID: \(hotKeyID.id)")
+                
+                // Call the callback on the main thread ASYNCHRONOUSLY
+                NSLog("🔥 Calling onHotkeyPressed callback")
+                DispatchQueue.main.async {
+                    NSLog("🔥 Executing onHotkeyPressed callback on main thread")
+                    if let instance = Unmanaged<HotkeyService>.fromOpaque(userData!).takeUnretainedValue().onHotkeyPressed {
+                        instance()
+                    }
+                }
             }
             
             return noErr
         }
         
-        let userData = Unmanaged.passUnretained(self).toOpaque()
+        let status = InstallEventHandler(GetEventDispatcherTarget(), callback, 1, &eventSpec, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
         
-        InstallEventHandler(
-            GetEventDispatcherTarget(),
-            callback,
-            1,
-            eventTypes,
-            userData,
-            &eventHandler
-        )
+        if status == noErr {
+            NSLog("✅ Event handler installed successfully")
+        } else {
+            NSLog("❌ Failed to install event handler: \(status)")
+        }
     }
     
     // Convert string representation to Carbon key codes
@@ -123,28 +128,28 @@ class HotkeyService: ObservableObject {
     
     // Convert UInt modifier flags to Carbon modifiers
     private func carbonModifiersFromFlags(_ flags: UInt) -> Int {
-        print("🔧 Converting modifier flags: \(flags)")
+        NSLog("🔧 Converting modifier flags: \(flags)")
         var carbonModifiers = 0
         
         // The flags come from our hotkey recorder which stores Carbon modifier flags
         if flags & UInt(cmdKey) != 0 {
             carbonModifiers |= cmdKey
-            print("🔧 Added cmdKey")
+            NSLog("🔧 Added cmdKey")
         }
         if flags & UInt(optionKey) != 0 {
             carbonModifiers |= optionKey
-            print("🔧 Added optionKey")
+            NSLog("🔧 Added optionKey")
         }
         if flags & UInt(controlKey) != 0 {
             carbonModifiers |= controlKey
-            print("🔧 Added controlKey")
+            NSLog("🔧 Added controlKey")
         }
         if flags & UInt(shiftKey) != 0 {
             carbonModifiers |= shiftKey
-            print("🔧 Added shiftKey")
+            NSLog("🔧 Added shiftKey")
         }
         
-        print("🔧 Final carbonModifiers: \(carbonModifiers)")
+        NSLog("🔧 Final carbonModifiers: \(carbonModifiers)")
         return carbonModifiers
     }
     
@@ -174,31 +179,48 @@ extension HotkeyService {
     }
     
     func pasteToActiveWindow() {
-        print("Attempting to paste to active window...")
+        NSLog("🔥 pasteToActiveWindow called")
         
-        // Check if we have accessibility permissions
-        if !hasAccessibilityPermissions() {
-            print("No accessibility permissions - requesting...")
-            requestAccessibilityPermissions()
+        // Check if we have accessibility permission
+        let hasAccessibility = AXIsProcessTrusted()
+        NSLog("🔥 Accessibility permission: \(hasAccessibility)")
+        
+        if !hasAccessibility {
+            NSLog("🔥 No accessibility permission - cannot paste")
+            
+            // Request accessibility permission
+            let alert = NSAlert()
+            alert.messageText = "Accessibility Permission Required"
+            alert.informativeText = "WolfWhisper needs accessibility permission to paste text to other applications. Please grant permission in System Preferences."
+            alert.addButton(withTitle: "Open System Preferences")
+            alert.addButton(withTitle: "Cancel")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                NSWorkspace.shared.open(url)
+            }
             return
         }
         
-        // Simulate Cmd+V to paste
+        NSLog("🔥 Have accessibility permission - proceeding with paste")
+        
+        // Simulate Cmd+V key press
         let source = CGEventSource(stateID: .hidSystemState)
         
-        // Key down for Cmd+V
-        let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) // V key
-        cmdVDown?.flags = .maskCommand
+        // Create key down event for Cmd+V
+        let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) // V key
+        keyDownEvent?.flags = .maskCommand
         
-        // Key up for Cmd+V
-        let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) // V key
-        cmdVUp?.flags = .maskCommand
+        // Create key up event for Cmd+V
+        let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) // V key
+        keyUpEvent?.flags = .maskCommand
         
         // Post the events
-        cmdVDown?.post(tap: .cghidEventTap)
-        cmdVUp?.post(tap: .cghidEventTap)
+        keyDownEvent?.post(tap: .cghidEventTap)
+        keyUpEvent?.post(tap: .cghidEventTap)
         
-        print("Paste events sent")
+        NSLog("🔥 Cmd+V key events posted")
     }
     
     func copyAndPaste(_ text: String) {

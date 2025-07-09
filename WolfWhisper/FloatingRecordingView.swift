@@ -110,6 +110,7 @@ struct FloatingRecordingView: View {
                 switch appState.currentState {
                 case .recording:
                     RecordingStateView(audioLevels: appState.audioLevels)
+                        .environmentObject(appState)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     
                 case .transcribing:
@@ -136,6 +137,7 @@ struct FloatingRecordingView: View {
 // MARK: - Recording State View with Data Wave Visualizer
 struct RecordingStateView: View {
     let audioLevels: [Float]
+    @EnvironmentObject var appState: AppStateModel
     
     var body: some View {
         VStack(spacing: 24) {
@@ -153,10 +155,46 @@ struct RecordingStateView: View {
                 }
                 
                 // Instructional text
-                Text("Press hotkey again to stop")
+                Text("Press hotkey again to stop or use the button below")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            
+            // Stop Recording Button
+            Button(action: {
+                Task {
+                    do {
+                        let audioData = try await AudioService.shared.stopRecording()
+                        await MainActor.run {
+                            appState.updateState(to: .transcribing)
+                        }
+                        // Transcribe the audio
+                        try await TranscriptionService.shared.transcribe(
+                            audioData: audioData,
+                            apiKey: appState.settings.apiKey,
+                            model: appState.settings.selectedModel.rawValue
+                        )
+                    } catch {
+                        await MainActor.run {
+                            appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
+                        }
+                    }
+                }
+            }) {
+                HStack {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 22, weight: .bold))
+                    Text("Stop Recording")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(Color.red.opacity(0.15))
+                .foregroundColor(.red)
+                .cornerRadius(12)
+                .shadow(color: .red.opacity(0.08), radius: 6, x: 0, y: 2)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
     }
 }
