@@ -60,26 +60,9 @@ struct ContentView: View {
                         NSLog("DEBUG: ===== HOTKEY RECORDING PATH =====")
                         NSLog("DEBUG: Showing in main app (background) and pasting to active window")
                         
-                        // For hotkey recordings, also paste to the active window
-                        if !AXIsProcessTrusted() {
-                            NSLog("DEBUG: No accessibility permission - requesting...")
-                            
-                            let alert = NSAlert()
-                            alert.messageText = "Accessibility Permission Required"
-                            alert.informativeText = "WolfWhisper needs accessibility permission to paste text to other applications. Please grant permission in System Preferences."
-                            alert.addButton(withTitle: "Open System Preferences")
-                            alert.addButton(withTitle: "Cancel")
-                            
-                            let response = alert.runModal()
-                            if response == .alertFirstButtonReturn {
-                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
-                        } else {
-                            NSLog("DEBUG: Accessibility permission granted, pasting to active window")
-                            hotkeyService.pasteToActiveWindow()
-                        }
+                        // For hotkey recordings, also paste to the active window using new AXUIElement method
+                        hotkeyService.setTextToPaste(text)
+                        hotkeyService.pasteToActiveWindow()
                     } else {
                         NSLog("DEBUG: ===== MANUAL RECORDING PATH =====")
                         NSLog("DEBUG: Showing in main app only")

@@ -355,7 +355,7 @@ struct PermissionsSetupView: View {
     
     private func checkPermissions() {
         microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
-        // TODO: Check accessibility permission
+        accessibilityPermission = AXIsProcessTrusted()
     }
     
     private func requestMicrophonePermission() {
@@ -368,20 +368,58 @@ struct PermissionsSetupView: View {
     }
     
     private func requestAccessibilityPermission() {
-        // First, make a request to trigger the app to appear in accessibility settings
-        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
+        print("🔧 DEBUG: requestAccessibilityPermission called")
         
-        // Then open System Preferences to Accessibility settings
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // First, check current status
+        let initialStatus = AXIsProcessTrusted()
+        print("🔧 DEBUG: Initial AXIsProcessTrusted status: \(initialStatus)")
+        
+        if initialStatus {
+            print("🔧 DEBUG: Already has accessibility permissions")
+            accessibilityPermission = true
+            return
+        }
+        
+        print("🔧 DEBUG: App bundle identifier: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        print("🔧 DEBUG: App executable path: \(Bundle.main.executablePath ?? "unknown")")
+        print("🔧 DEBUG: App bundle path: \(Bundle.main.bundlePath)")
+        
+        // Create the options dictionary with prompt
+        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let options = [promptKey: true] as CFDictionary
+        
+        print("🔧 DEBUG: About to call AXIsProcessTrustedWithOptions with prompt=true")
+        print("🔧 DEBUG: Prompt key: \(promptKey)")
+        
+        // This should trigger the system prompt and add the app to the list
+        let isTrusted = AXIsProcessTrustedWithOptions(options)
+        print("🔧 DEBUG: AXIsProcessTrustedWithOptions returned: \(isTrusted)")
+        
+        if isTrusted {
+            print("🔧 DEBUG: Permissions granted immediately")
+            accessibilityPermission = true
+            return
+        }
+        
+        print("🔧 DEBUG: Permissions not granted, should have triggered system prompt")
+        
+        // Check if the app is now in the TCC database (might not be trusted yet, but should be listed)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let statusAfterPrompt = AXIsProcessTrusted()
+            print("🔧 DEBUG: Status after 1 second: \(statusAfterPrompt)")
+            
+            // Try to open System Settings
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                print("🔧 DEBUG: Opening System Settings...")
                 NSWorkspace.shared.open(url)
             }
         }
         
-        // Update the permission status after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            checkPermissions()
+        // Check permission status after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            let finalStatus = AXIsProcessTrusted()
+            print("🔧 DEBUG: Final status after 3 seconds: \(finalStatus)")
+            self.checkPermissions()
         }
     }
 }

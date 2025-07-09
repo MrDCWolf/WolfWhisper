@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		065CD473CF4419C474E83A85 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E288A012473F7F722F7063 /* KeychainService.swift */; };
+		0A41CE9A43A44CE996264DA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6859253046A64529AB24BBA0 /* PrivacyInfo.xcprivacy */; };
 		0E6CAC4A1545EB4413AA493F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BCC61FC44DF0430C2BA3D0 /* OnboardingView.swift */; };
 		3E4804C699DC392A038E0C1E /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB11 /* HotkeyService.swift */; };
 		3E4804C699DC392A038E0C1F /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */; };
@@ -28,6 +29,7 @@
 		498948B290C8A7419E2BEB11 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		498948B290C8A7419E2BEB12 /* HotkeyRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderField.swift; sourceTree = "<group>"; };
 		63A1D482C8A8A384BEB7ABE2 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		6859253046A64529AB24BBA0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WolfWhisperApp.swift; sourceTree = "<group>"; };
 		908A50274BE4BBC01EC555BB /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		A9E868304B1233FA19B9C104 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -68,6 +70,7 @@
 				D2284274775507B1AB47C60D /* WaveformView.swift */,
 				6DB9BF108FDD023B23817075 /* WolfWhisperApp.swift */,
 				F1234567890123456789ABCD /* WolfWhisper.entitlements */,
+				6859253046A64529AB24BBA0 /* PrivacyInfo.xcprivacy */,
 			);
 			path = WolfWhisper;
 			sourceTree = "<group>";
@@ -136,6 +139,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				63A90D417BBC2C693C6C5361 /* Assets.xcassets in Resources */,
+				0A41CE9A43A44CE996264DA1 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -168,10 +172,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_ENTITLEMENTS = WolfWhisper/WolfWhisper.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application: Daniel Wolf (ZT6QMA463J)";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZT6QMA463J;
+				DEVELOPMENT_TEAM = ZT6QMA463J;
+				ENABLE_HARDENED_RUNTIME = YES;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp --options runtime";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;
@@ -310,10 +317,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_ENTITLEMENTS = WolfWhisper/WolfWhisper.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application: Daniel Wolf (ZT6QMA463J)";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZT6QMA463J;
+				ENABLE_HARDENED_RUNTIME = YES;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp --options runtime";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WolfWhisper/Info.plist;

@@ -30,4 +30,15 @@ DerivedData/
 *~
 build.log
 .idea/
-.vscode/ 
+.vscode/ # Build products
+*.xcarchive/
+*.zip
+*.app
+build/
+DerivedData/
+
+# Backup files
+*.backup
+
+# macOS files
+.DS_Store
