@@ -48,7 +48,11 @@ struct ContentView: View {
                     
                     // Always update the main app UI to show the transcription
                     appState.updateState(to: .idle)
-                    appState.setTranscribedText(text)
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        appState.transcribedText = "No speech detected"
+                    } else {
+                        appState.transcribedText = text
+                    }
                     
                     // Always copy to clipboard
                     let pasteboard = NSPasteboard.general
