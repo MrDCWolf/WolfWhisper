@@ -54,14 +54,36 @@ class TranscriptionService: ObservableObject {
         // Add file parameter
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
+        
+        // Add prompt parameter for enhanced transcription quality with cleanup
+        let transcriptionPrompt = """
+        Please provide a clean, professional transcription with the following enhancements:
+        
+        1. GRAMMAR: Fix grammatical errors and ensure proper sentence structure while preserving the speaker's intended meaning.
+        2. FILLER WORDS: Remove all filler words and sounds including 'um', 'uh', 'ah', 'er', 'like', 'you know', 'so', and similar verbal hesitations.
+        3. STUTTERS: Remove stutters and repeated words (e.g., "I I I think" becomes "I think").
+        4. PUNCTUATION: Add proper punctuation including periods, commas, question marks, and exclamation points based on context and intonation.
+        5. CAPITALIZATION: Use proper capitalization for sentences, proper nouns, and acronyms.
+        6. FORMATTING: Present as clear, readable text that flows naturally.
+        
+        Maintain the speaker's original intent and meaning while making the text professional and polished.
+        """
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"prompt\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(transcriptionPrompt)\r\n".data(using: .utf8)!)
         
         // Add response format parameter
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
         body.append("text\r\n".data(using: .utf8)!)
+        
+        // Add temperature parameter for more consistent results
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"temperature\"\r\n\r\n".data(using: .utf8)!)
+        body.append("0.2\r\n".data(using: .utf8)!)
         
         // Close boundary
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)

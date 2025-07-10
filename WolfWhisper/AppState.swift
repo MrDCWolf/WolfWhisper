@@ -4,7 +4,6 @@ import ApplicationServices
 import AVFoundation
 import AppKit
 import UniformTypeIdentifiers
-import Combine
 
 // The various states the application can be in.
 enum AppState {
@@ -42,54 +41,6 @@ enum WhisperModel: String, CaseIterable {
     }
 }
 
-// Available Gemini models
-enum GeminiModel: String, CaseIterable {
-    case gemini25Flash = "gemini-2.5-flash"
-    case gemini25FlashLite = "gemini-2.5-flash-lite-preview-06-17"
-    
-    var displayName: String {
-        switch self {
-        case .gemini25Flash:
-            return "Gemini 2.5 Flash"
-        case .gemini25FlashLite:
-            return "Gemini 2.5 Flash Lite"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .gemini25Flash:
-            return "Google's latest Gemini 2.5 Flash model for fast, accurate transcription"
-        case .gemini25FlashLite:
-            return "Lightweight Gemini 2.5 Flash model optimized for speed"
-        }
-    }
-}
-
-// Available transcription providers
-enum TranscriptionProvider: String, CaseIterable {
-    case openAI = "openai"
-    case gemini = "gemini"
-    
-    var displayName: String {
-        switch self {
-        case .openAI:
-            return "OpenAI"
-        case .gemini:
-            return "Google Gemini"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .openAI:
-            return "OpenAI's Whisper models for speech-to-text transcription"
-        case .gemini:
-            return "Google's Gemini models with built-in transcription and cleanup"
-        }
-    }
-}
-
 // Settings model
 @MainActor
 class SettingsModel: ObservableObject {
@@ -101,11 +52,6 @@ class SettingsModel: ObservableObject {
     @Published var hotkeyDisplay: String = "⌘⇧D" // Stored property for UI display
     @Published var showInMenuBar: Bool = false
     @Published var launchAtLogin: Bool = false
-    
-    // Provider and Gemini settings
-    @Published var selectedProvider: TranscriptionProvider = .openAI
-    @Published var geminiApiKey: String = ""
-    @Published var selectedGeminiModel: GeminiModel = .gemini25Flash
     
     private var keychainService: KeychainService {
         return KeychainService.shared
@@ -146,15 +92,6 @@ class SettingsModel: ObservableObject {
         
         showInMenuBar = UserDefaults.standard.bool(forKey: "showInMenuBar")
         launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-        
-        // Load provider settings
-        selectedProvider = TranscriptionProvider(rawValue: UserDefaults.standard.string(forKey: "selectedProvider") ?? TranscriptionProvider.openAI.rawValue) ?? .openAI
-        selectedGeminiModel = GeminiModel(rawValue: UserDefaults.standard.string(forKey: "selectedGeminiModel") ?? GeminiModel.gemini25Flash.rawValue) ?? .gemini25Flash
-        
-        // Load Gemini API key from keychain
-        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            loadGeminiApiKey()
-        }
     }
     
     func saveSettings() {
@@ -171,39 +108,20 @@ class SettingsModel: ObservableObject {
         UserDefaults.standard.set(hotkeyDisplay, forKey: "hotkeyDisplay")
         UserDefaults.standard.set(showInMenuBar, forKey: "showInMenuBar")
         UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
-        
-        // Save provider settings
-        UserDefaults.standard.set(selectedProvider.rawValue, forKey: "selectedProvider")
-        UserDefaults.standard.set(selectedGeminiModel.rawValue, forKey: "selectedGeminiModel")
-        
-        // Save Gemini API key to keychain if not empty and onboarding is complete
-        if !geminiApiKey.isEmpty && UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            _ = keychainService.saveGeminiApiKey(geminiApiKey)
-        }
     }
     
     var isConfigured: Bool {
-        // Only consider configured if onboarding is complete AND appropriate API key exists
+        // Only consider configured if onboarding is complete AND API key exists
         guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else {
             return false
         }
-        
-        switch selectedProvider {
-        case .openAI:
-            return !apiKey.isEmpty
-        case .gemini:
-            return !geminiApiKey.isEmpty
-        }
+        return !apiKey.isEmpty
     }
     
 
     
     func loadApiKey() {
         apiKey = keychainService.loadApiKey() ?? ""
-    }
-    
-    func loadGeminiApiKey() {
-        geminiApiKey = keychainService.loadGeminiApiKey() ?? ""
     }
     
     func exportDebugLog() {
@@ -215,12 +133,14 @@ class SettingsModel: ObservableObject {
         savePanel.allowedContentTypes = [.plainText]
         
         savePanel.begin { response in
-            Task { @MainActor in
-                if response == .OK, let url = savePanel.url {
-                    do {
-                        try debugInfo.write(to: url, atomically: true, encoding: .utf8)
-                    } catch {
-                        print("Failed to export debug log: \(error)")
+            if response == .OK {
+                Task { @MainActor in
+                    if let url = savePanel.url {
+                        do {
+                            try debugInfo.write(to: url, atomically: true, encoding: .utf8)
+                        } catch {
+                            print("Failed to export debug log: \(error)")
+                        }
                     }
                 }
             }
@@ -232,20 +152,17 @@ class SettingsModel: ObservableObject {
         
         info.append("WolfWhisper Debug Log")
         info.append("Generated: \(Date())")
-        info.append("Version: 1.4.0")
+        info.append("Version: 1.1")
         info.append("")
         
         info.append("=== Settings ===")
-        info.append("Selected Provider: \(selectedProvider.displayName)")
         info.append("Selected Model: \(selectedModel.rawValue)")
-        info.append("Selected Gemini Model: \(selectedGeminiModel.rawValue)")
         info.append("Hotkey Enabled: \(hotkeyEnabled)")
         info.append("Hotkey Display: \(hotkeyDisplay)")
         info.append("Hotkey Modifiers: \(hotkeyModifiers)")
         info.append("Hotkey Key: \(hotkeyKey)")
         info.append("Show in Menu Bar: \(showInMenuBar)")
         info.append("Launch at Login: \(launchAtLogin)")
-
         info.append("")
         
         info.append("=== System ===")
@@ -260,7 +177,7 @@ class SettingsModel: ObservableObject {
         
         info.append("=== UserDefaults ===")
         let defaults = UserDefaults.standard
-        let keys = ["selectedProvider", "selectedModel", "selectedGeminiModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "hasCompletedOnboarding"]
+        let keys = ["selectedModel", "hotkeyEnabled", "hotkeyModifiers", "hotkeyKey", "hotkeyDisplay", "showInMenuBar", "launchAtLogin", "hasCompletedOnboarding"]
         for key in keys {
             info.append("\(key): \(defaults.object(forKey: key) ?? "nil")")
         }
@@ -285,9 +202,7 @@ class SettingsModel: ObservableObject {
     func resetAllSettings() {
         // Reset UserDefaults
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "selectedProvider")
         defaults.removeObject(forKey: "selectedModel")
-        defaults.removeObject(forKey: "selectedGeminiModel")
         defaults.removeObject(forKey: "hotkeyEnabled")
         defaults.removeObject(forKey: "hotkeyModifiers")
         defaults.removeObject(forKey: "hotkeyKey")
@@ -298,7 +213,6 @@ class SettingsModel: ObservableObject {
         
         // Clear keychain
         keychainService.deleteApiKey()
-        keychainService.deleteGeminiApiKey()
         
         // Reload settings
         loadSettings()
@@ -335,25 +249,15 @@ class AppStateModel: ObservableObject {
     @Published var transcribedText: String = ""
     @Published var audioLevels: [Float] = []
     @Published var wasTriggeredByHotkey: Bool = false
+    @Published var wasRecordingStartedByHotkey: Bool = false
     @Published var needsSetup: Bool = false
     @Published var debugInfo: String = "Debug: No transcription yet"
     
     // Settings
     @Published var settings = SettingsModel()
     
-    private var settingsObserver: AnyCancellable?
-    
     init() {
         checkFirstLaunch()
-        setupSettingsObserver()
-    }
-    
-    private func setupSettingsObserver() {
-        // Listen to changes in the settings model and re-publish them
-        settingsObserver = settings.objectWillChange.sink { [weak self] _ in
-            // This will trigger UI updates when any settings property changes
-            self?.objectWillChange.send()
-        }
     }
     
     private func checkFirstLaunch() {
@@ -418,14 +322,8 @@ class AppStateModel: ObservableObject {
             missingRequirements.append("Microphone Access")
         }
         
-        // 3. Check accessibility permissions (for hotkeys)
-        if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
-            missingRequirements.append("Accessibility Access")
-            // Proactively request accessibility permissions using HotkeyService
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                HotkeyService.shared.requestAccessibilityPermissions()
-            }
-        }
+        // 3. Accessibility permissions are handled on-demand in HotkeyService
+        // No need to validate upfront - user will be prompted when they try to paste
         
         if !missingRequirements.isEmpty {
             needsSetup = true
@@ -448,17 +346,44 @@ class AppStateModel: ObservableObject {
     }
     
     func startRecording() async {
-        // This will be called from menu bar - delegate to audio service
-        updateState(to: .recording)
-        // The actual recording logic should be handled by ContentView or AudioService
+        // This will be called from menu bar or main window
+        // DO NOT modify wasRecordingStartedByHotkey here - it should be set by the caller
+        guard settings.isConfigured else {
+            await MainActor.run {
+                debugInfo = "Debug: Settings not configured"
+                showSettings = true
+            }
+            return
+        }
+        await MainActor.run {
+            updateState(to: .recording)
+            debugInfo = "Debug: Starting recording..."
+        }
+        do {
+            try await AudioService.shared.startRecording()
+            await MainActor.run {
+                debugInfo = "Debug: Recording started successfully"
+            }
+        } catch {
+            await MainActor.run {
+                debugInfo = "Debug: Recording failed: \(error)"
+                updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func startRecordingFromMenuBar() async {
+        // Explicitly mark as NOT started by hotkey
+        await MainActor.run {
+            wasRecordingStartedByHotkey = false
+            wasTriggeredByHotkey = false
+        }
+        await startRecording()
     }
     
     func requestAccessibilityPermission() {
-        // Open System Settings to Accessibility settings (macOS 13+)
-        Task { @MainActor in
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
-        }
+        // Open System Preferences to Accessibility settings
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 } 

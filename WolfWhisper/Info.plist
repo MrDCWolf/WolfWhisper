@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string></string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,14 +17,18 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.5</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>WolfWhisper needs microphone access to record your voice for dictation.</string>
-	<key>NSAppleEventsUsageDescription</key>
+	<key>NSAccessibilityUsageDescription</key>
 	<string>WolfWhisper needs accessibility permissions to paste transcribed text into other applications.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>WolfWhisper needs permission to send keystrokes to other applications to paste your transcribed text.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>WolfWhisper needs to access the microphone to record your voice for transcription.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>WolfWhisper needs to use Speech Recognition to transcribe your voice recordings.</string>
 </dict>
 </plist>
