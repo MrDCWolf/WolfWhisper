@@ -218,17 +218,18 @@ struct MainAppView: View {
                 .ignoresSafeArea()
             }
             
-            VStack(spacing: 20) {
+            VStack(spacing: 10) {
                 // Modern Header with Wolf Logo
                 ModernHeaderView(appState: appState)
                 
                 // Central Recording Interface
-                VStack(spacing: 12) {
+                VStack(spacing: 6) {
                     // Glass-style Recording Button
                     ModernRecordingButton(
                         state: appState.currentState,
                         isRecording: appState.currentState == .recording,
                         audioLevels: appState.audioLevels,
+                        appState: appState,
                         action: {
                             handleRecordingButtonTap(appState: appState)
                         }
@@ -250,11 +251,11 @@ struct MainAppView: View {
                 // Sleek Footer with Hotkey
                 ModernFooterView(appState: appState)
             }
-            .padding(.top, 15)
-            .padding(.horizontal, 25)
-            .padding(.bottom, 15)
+            .padding(.top, 4)
+            .padding(.horizontal, 17.5)
+            .padding(.bottom, 10.5)
         }
-        .frame(minWidth: 450, maxWidth: 600, minHeight: 500, maxHeight: 650)
+        .frame(minWidth: 380)
     }
     
 
@@ -280,7 +281,7 @@ struct ModernHeaderView: View {
             
             // App Title with Modern Typography
             Text("WolfWhisper")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .font(.system(size: 19.6, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
                 .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
             
@@ -354,6 +355,7 @@ struct ModernRecordingButton: View {
     let state: AppState
     let isRecording: Bool
     let audioLevels: [Float]
+    @ObservedObject var appState: AppStateModel
     let action: () -> Void
     
     @State private var isPressed = false
@@ -400,11 +402,15 @@ struct ModernRecordingButton: View {
                 Group {
                     switch state {
                     case .idle:
-                        ModernIdleContent()
+                        if appState.transcribedText.isEmpty {
+                            ModernIdleContent()
+                        } else {
+                            ModernCompletedContent()
+                        }
                     case .recording:
-                        ModernRecordingContent(audioLevels: audioLevels)
+                        ModernRecordingContent(audioLevels: audioLevels, appState: appState)
                     case .transcribing:
-                        ModernTranscribingContent()
+                        ModernTranscribingContentNew()
                     }
                 }
             }
@@ -452,7 +458,7 @@ struct ModernRecordingButton: View {
 struct ModernIdleContent: View {
     var body: some View {
         Image(systemName: "mic.fill")
-            .font(.system(size: 32, weight: .medium))
+            .font(.system(size: 33.6, weight: .medium))
             .foregroundStyle(.white)
             .symbolRenderingMode(.hierarchical)
     }
@@ -460,29 +466,35 @@ struct ModernIdleContent: View {
 
 struct ModernRecordingContent: View {
     let audioLevels: [Float]
+    @ObservedObject var appState: AppStateModel
     @State private var waveAnimation: Bool = false
+    
+    @ViewBuilder
+    private var miniVisualization: some View {
+        switch appState.currentState {
+        case .recording:
+            MiniWaveVisualizer(audioLevels: audioLevels)
+        case .transcribing:
+            MiniTranscribingVisualizer()
+        case .idle:
+            if appState.transcribedText.isEmpty {
+                MiniWaveVisualizer(audioLevels: audioLevels)
+            } else {
+                MiniClipboardVisualizer()
+            }
+        }
+    }
     
     var body: some View {
         ZStack {
-            // Animated waveform background
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .stroke(.white.opacity(0.3), lineWidth: 2)
-                    .frame(width: CGFloat(40 + index * 15), height: CGFloat(40 + index * 15))
-                    .scaleEffect(waveAnimation ? 1.2 : 0.8)
-                    .opacity(waveAnimation ? 0.0 : 0.6)
-                    .animation(
-                        .easeInOut(duration: 1.5)
-                        .repeatForever(autoreverses: false)
-                        .delay(Double(index) * 0.3),
-                        value: waveAnimation
-                    )
-            }
+            // Background circle
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 70, height: 70)
             
-            Image(systemName: "waveform")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.white)
-                .symbolRenderingMode(.hierarchical)
+                                // Mini visualization based on current state
+                    miniVisualization
+                .frame(width: 60, height: 24)
         }
         .onAppear {
             waveAnimation = true
@@ -490,87 +502,54 @@ struct ModernRecordingContent: View {
     }
 }
 
-struct ModernTranscribingContent: View {
-    @State private var rotationAngle: Double = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var nodeOpacity: Double = 0.5
+
+
+struct ModernTranscribingContentNew: View {
+    var body: some View {
+        ZStack {
+            // Background circle
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 70, height: 70)
+            
+            // Beautiful rolling rainbow waveform 
+            MiniTranscribingVisualizer()
+                .frame(width: 60, height: 24)
+        }
+    }
+}
+
+struct ModernCompletedContent: View {
+    @State private var showMicrophoneIcon = false
     
     var body: some View {
         ZStack {
-            // Outer ring
+            // Background circle
             Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.cyan.opacity(0.8), Color.blue.opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 3
-                )
+                .fill(Color.white.opacity(0.1))
                 .frame(width: 70, height: 70)
-                .rotationEffect(.degrees(rotationAngle))
             
-            // Middle ring
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.6), Color.purple.opacity(0.4)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 2
-                )
-                .frame(width: 55, height: 55)
-                .rotationEffect(.degrees(-rotationAngle * 0.7))
-            
-            // Inner ring
-            Circle()
-                .stroke(Color.purple.opacity(0.4), lineWidth: 1.5)
-                .frame(width: 40, height: 40)
-                .rotationEffect(.degrees(rotationAngle * 1.3))
-            
-            // Processing nodes
-            ForEach(0..<6, id: \.self) { node in
-                Circle()
-                    .fill(Color.cyan)
-                    .frame(width: 4, height: 4)
-                    .offset(
-                        x: cos(Double(node) * .pi / 3) * 25,
-                        y: sin(Double(node) * .pi / 3) * 25
-                    )
-                    .rotationEffect(.degrees(rotationAngle * 0.5))
-                    .opacity(nodeOpacity)
-            }
-            
-            // Central brain
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white)
-                    .frame(width: 28, height: 22)
-                    .scaleEffect(pulseScale)
-                
-                Image(systemName: "brain")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.cyan)
-                    .scaleEffect(pulseScale)
+            // Show either clipboard animation or default microphone icon
+            if showMicrophoneIcon {
+                // Default microphone icon
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 33.6, weight: .medium))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.hierarchical)
+                    .transition(.opacity.combined(with: .scale))
+            } else {
+                // Beautiful clipboard animation
+                MiniClipboardVisualizer()
+                    .scaleEffect(2.5) // Scale up for main window visibility
             }
         }
         .onAppear {
-            startAnimations()
-        }
-    }
-    
-    private func startAnimations() {
-        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
-            rotationAngle = 360
-        }
-        
-        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.15
-        }
-        
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            nodeOpacity = 1.0
+            // After clipboard animation completes, show microphone icon
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    showMicrophoneIcon = true
+                }
+            }
         }
     }
 }
@@ -601,7 +580,7 @@ struct ModernTranscriptionPanel: View {
                                 .symbolRenderingMode(.hierarchical)
                             
                             Text("No transcription yet")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .font(.system(size: 12.6, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         .transition(.opacity.combined(with: .scale))
@@ -609,7 +588,7 @@ struct ModernTranscriptionPanel: View {
                         // Transcribed text with typing animation
                         ScrollView {
                             Text(text)
-                                .font(.system(size: 16, weight: .regular, design: .rounded))
+                                .font(.system(size: 12.6, weight: .regular, design: .rounded))
                                 .foregroundStyle(.primary)
                                 .lineSpacing(4)
                                 .padding(20)
@@ -633,12 +612,12 @@ struct ModernFooterView: View {
             HStack(spacing: 12) {
                 // Hotkey label with icon
                 Label("Global Hotkey:", systemImage: "keyboard")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.system(size: 12.6, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                 
                 // Modern hotkey display
                 Text(formatHotkeyDisplay(appState.settings.hotkeyDisplay))
-                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 12.6, weight: .semibold, design: .monospaced)) // match label size
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -669,6 +648,266 @@ struct ModernFooterView: View {
             .replacingOccurrences(of: "Option", with: "⌥")
             .replacingOccurrences(of: "Control", with: "⌃")
             .replacingOccurrences(of: "+", with: " ")
+    }
+}
+
+// MARK: - Mini Wave Visualizer for Main Window
+struct MiniWaveVisualizer: View {
+    let audioLevels: [Float]
+    
+    private let barCount = 16
+    private let barSpacing: CGFloat = 1.5
+    
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let currentTime = timeline.date.timeIntervalSinceReferenceDate
+            
+            HStack(spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    MiniWaveformBar(
+                        index: index,
+                        barCount: barCount,
+                        audioLevels: audioLevels,
+                        time: currentTime
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Mini Waveform Bar
+struct MiniWaveformBar: View {
+    let index: Int
+    let barCount: Int
+    let audioLevels: [Float]
+    let time: Double
+    
+    private var barWidth: CGFloat {
+        2.0
+    }
+    
+    private var audioLevel: Float {
+        // Map bar index to audio frequency band
+        let audioIndex = Int(Float(index) / Float(barCount) * Float(audioLevels.count))
+        if audioIndex < audioLevels.count {
+            return audioLevels[audioIndex]
+        }
+        return 0.0
+    }
+    
+    private var animatedHeight: CGFloat {
+        let maxHeight: CGFloat = 24
+        let baseHeight = CGFloat(audioLevel) * maxHeight
+        let animationOffset = Darwin.sin(time * 4 + Double(index) * 0.3) * 2
+        return max(2, baseHeight + animationOffset)
+    }
+    
+    private var rainbowColor: Color {
+        // Create rainbow gradient from purple to red based on bar position
+        let normalizedPosition = Double(index) / Double(barCount - 1)
+        
+        // Rainbow progression: Purple -> Blue -> Cyan -> Green -> Yellow -> Orange -> Red
+        let hue = 0.8 - (normalizedPosition * 0.8) // 0.8 (purple) to 0.0 (red)
+        
+        return Color(
+            hue: hue,
+            saturation: 0.8 + Double(audioLevel) * 0.2, // More saturated with audio
+            brightness: 0.7 + Double(audioLevel) * 0.3  // Brighter with audio
+        )
+    }
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            
+            RoundedRectangle(cornerRadius: barWidth / 2)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            rainbowColor.opacity(0.9),
+                            rainbowColor.opacity(0.7),
+                            rainbowColor.opacity(0.5)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: barWidth, height: animatedHeight)
+                .shadow(color: rainbowColor.opacity(0.3), radius: 1, x: 0, y: 0.5)
+                .animation(.easeOut(duration: 0.05), value: Double(audioLevel))
+            
+            Spacer()
+        }
+        .frame(height: 24)
+    }
+}
+
+// MARK: - Mini Transcribing Visualizer
+struct MiniTranscribingVisualizer: View {
+    private let barCount = 16
+    private let barSpacing: CGFloat = 1.5
+    
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let currentTime = timeline.date.timeIntervalSinceReferenceDate
+            
+            HStack(spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    MiniTranscribingBar(
+                        index: index,
+                        barCount: barCount,
+                        time: currentTime
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Mini Transcribing Bar
+struct MiniTranscribingBar: View {
+    let index: Int
+    let barCount: Int
+    let time: Double
+    
+    private var barWidth: CGFloat {
+        2.0
+    }
+    
+    private var animatedHeight: CGFloat {
+        let maxHeight: CGFloat = 24
+        let minHeight: CGFloat = 0.5
+        
+        // Create rolling wave pattern with more dramatic variation
+        let waveOffset = time * 2
+        let indexOffset = Double(index) * 0.4
+        
+        let primaryWave = Darwin.sin(waveOffset + indexOffset) * 0.5
+        let secondaryWave = Darwin.sin(waveOffset * 1.5 + indexOffset * 0.7) * 0.4
+        
+        let combinedWave = primaryWave + secondaryWave
+        let normalizedHeight = (combinedWave + 1) / 2 // Normalize to 0-1
+        
+        // Map to height range with more dramatic variation
+        let heightRange = maxHeight - minHeight
+        return minHeight + (normalizedHeight * heightRange)
+    }
+    
+    private var rainbowColor: Color {
+        // Create rainbow gradient from purple to red based on bar position
+        let normalizedPosition = Double(index) / Double(barCount - 1)
+        
+        // Rainbow progression with rolling animation
+        let timeOffset = time * 0.5
+        let hue = fmod(0.8 - (normalizedPosition * 0.8) + timeOffset, 1.0)
+        
+        return Color(
+            hue: hue,
+            saturation: 0.8,
+            brightness: 0.8
+        )
+    }
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            
+            RoundedRectangle(cornerRadius: barWidth / 2)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            rainbowColor.opacity(0.9),
+                            rainbowColor.opacity(0.7),
+                            rainbowColor.opacity(0.5)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: barWidth, height: animatedHeight)
+                .shadow(color: rainbowColor.opacity(0.3), radius: 1, x: 0, y: 0.5)
+            
+            Spacer()
+        }
+        .frame(height: 24)
+    }
+}
+
+// MARK: - Mini Clipboard Visualizer
+struct MiniClipboardVisualizer: View {
+    @State private var showCompleted = false
+    @State private var pulseScale: CGFloat = 1.0
+    
+    var body: some View {
+        ZStack {
+            if showCompleted {
+                // Completed state with checkmark
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.blue.opacity(0.8),
+                                Color.cyan.opacity(0.6)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .scaleEffect(pulseScale)
+                    .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
+            } else {
+                // Initial clipboard animation
+                ZStack {
+                    // Background glow
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.blue.opacity(0.3),
+                                    Color.blue.opacity(0.1),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 12
+                            )
+                        )
+                        .frame(width: 24, height: 24)
+                        .scaleEffect(pulseScale)
+                    
+                    // Clipboard icon
+                    Image(systemName: "clipboard")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                        .scaleEffect(pulseScale)
+                }
+            }
+        }
+        .onAppear {
+            startAnimation()
+        }
+    }
+    
+    private func startAnimation() {
+        // Phase 1: Initial clipboard animation
+        withAnimation(.easeInOut(duration: 0.4)) {
+            pulseScale = 1.2
+        }
+        
+        // Phase 2: Transition to completed state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showCompleted = true
+                pulseScale = 1.0
+            }
+            
+            // Subtle pulse for completed state
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulseScale = 1.05
+            }
+        }
     }
 }
 

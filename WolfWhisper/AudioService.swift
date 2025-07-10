@@ -133,7 +133,7 @@ class AudioService: NSObject, ObservableObject {
     }
     
     private func startLevelMonitoring() {
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateAudioLevels()
             }
@@ -184,15 +184,18 @@ class AudioService: NSObject, ObservableObject {
     }
     
     private func normalizeAudioLevel(_ decibels: Float) -> Float {
-        // Convert dB to linear scale
-        // -60 dB is considered silence, 0 dB is maximum
-        let minDB: Float = -60.0
+        // Convert dB to linear scale with better responsiveness
+        // -50 dB is considered silence (was -60), 0 dB is maximum
+        let minDB: Float = -50.0
         let maxDB: Float = 0.0
         
         let clampedDB = max(minDB, min(maxDB, decibels))
         let normalized = (clampedDB - minDB) / (maxDB - minDB)
         
-        return normalized
+        // Apply a slight curve to make it more responsive to voice
+        let curved = pow(normalized, 0.7)
+        
+        return curved
     }
 }
 

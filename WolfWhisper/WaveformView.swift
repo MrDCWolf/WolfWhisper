@@ -45,7 +45,7 @@ struct WaveformView: View {
             // Use actual audio levels
             let levelIndex = min(index, audioLevels.count - 1)
             let level = audioLevels[levelIndex]
-            return max(2, CGFloat(level) * 40) // Scale to reasonable height
+            return max(2, CGFloat(level) * 28) // Scale to reasonable height
         }
     }
     
@@ -119,7 +119,7 @@ struct RecordingButton: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 80, height: 80)
+                .frame(width: 112, height: 112)
                 .overlay(
                     Circle()
                         .stroke(Color.white.opacity(0.2), lineWidth: 1)

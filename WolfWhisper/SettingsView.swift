@@ -52,8 +52,8 @@ struct SettingsView: View {
                     selectedTab: $selectedTab,
                     onTabChange: { tab in selectedTab = tab }
                 )
-                .frame(width: 220)
-                .navigationSplitViewColumnWidth(220)
+                .frame(width: 154)
+                .navigationSplitViewColumnWidth(154)
             } detail: {
                 // Modern Content
                 ZStack {
@@ -127,7 +127,7 @@ struct ModernGeneralSettingsView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(14)
         }
         .onDisappear {
             settings.saveSettings()
@@ -149,14 +149,14 @@ struct ModernSettingsField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.system(size: 11.2, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
             
             content
             
             if let description = description {
                 Text(description)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 9.8, weight: .regular))
                     .foregroundStyle(.secondary)
             }
         }
@@ -170,7 +170,7 @@ struct ModernToggle: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.system(size: 11.2, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
             
             Spacer()
@@ -224,7 +224,7 @@ struct ModernAudioSettingsView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(14)
         }
         .task {
             // Load microphone name asynchronously to avoid SwiftUI update loops
@@ -264,7 +264,7 @@ struct ModernHotkeySettingsView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(14)
         }
         .onDisappear {
             settings.saveSettings()
@@ -331,19 +331,19 @@ struct ModernAdvancedSettingsView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Version:")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 11.2, weight: .medium))
                             Spacer()
                             Text("1.0")
-                                .font(.system(size: 16, weight: .regular))
+                                .font(.system(size: 11.2, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
                         
                         HStack {
                             Text("Build:")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 11.2, weight: .medium))
                             Spacer()
                             Text("2024.01")
-                                .font(.system(size: 16, weight: .regular))
+                                .font(.system(size: 11.2, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -352,15 +352,15 @@ struct ModernAdvancedSettingsView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Link("View on GitHub", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper")!)
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 11.2, weight: .medium))
                             
                             Link("Report Issue", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper/issues")!)
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 11.2, weight: .medium))
                         }
                     }
                 }
             }
-            .padding(20)
+            .padding(14)
         }
         .alert("Reset Settings", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) { }
@@ -401,7 +401,7 @@ struct ModernActionButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(.system(size: 9.8, weight: .medium, design: .rounded))
                 .foregroundStyle(style.foregroundColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
@@ -428,12 +428,12 @@ struct ModernSettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
             
             content
         }
-        .padding(20)
+        .padding(14)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -466,7 +466,7 @@ struct ModernSidebar: View {
                     }
                     
                     Text("Settings")
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                 }
                 .padding(.horizontal, 20)
@@ -500,10 +500,10 @@ struct ModernSidebar: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WolfWhisper")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.system(size: 8.4, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                     Text("Version 1.0")
-                        .font(.system(size: 11, weight: .regular))
+                        .font(.system(size: 7.7, weight: .regular))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 20)
@@ -528,7 +528,7 @@ struct ModernSidebarTab: View {
                     .frame(width: 20)
                 
                 Text(tab.rawValue)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.system(size: 11.2, weight: .medium, design: .rounded))
                     .foregroundStyle(isSelected ? .blue : .primary)
                 
                 Spacer()

@@ -31,8 +31,8 @@ struct OnboardingView: View {
                     EmptyView()
                 }
             }
-            .padding(40)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(28)
+            .frame(maxWidth: 350, maxHeight: .infinity)
         }
     }
 }
@@ -44,16 +44,15 @@ struct WelcomeView: View {
         VStack(spacing: 30) {
             // App Icon/Logo
             Image(systemName: "waveform")
-                .font(.system(size: 60))
+                .font(.system(size: 42))
                 .foregroundColor(.blue)
             
             VStack(spacing: 16) {
                 Text("Welcome to WolfWhisper")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 19.6, weight: .bold))
                 
                 Text("AI-Powered Voice Dictation")
-                    .font(.title2)
+                    .font(.system(size: 11.2, weight: .regular))
                     .foregroundColor(.secondary)
             }
             
@@ -70,7 +69,7 @@ struct WelcomeView: View {
                 appState.onboardingState = .apiKeySetup
             }) {
                 Text("Get Started")
-                    .font(.headline)
+                    .font(.system(size: 9.8, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
@@ -119,15 +118,14 @@ struct APIKeySetupView: View {
         VStack(spacing: 30) {
             VStack(spacing: 16) {
                 Image(systemName: "key.fill")
-                    .font(.system(size: 60))
+                    .font(.system(size: 42))
                     .foregroundColor(.blue)
                 
                 Text("OpenAI API Key")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 19.6, weight: .bold))
                 
                 Text("Enter your OpenAI API key to enable voice transcription")
-                    .font(.title3)
+                    .font(.system(size: 9.1, weight: .regular))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -211,15 +209,14 @@ struct ModelSelectionView: View {
         VStack(spacing: 30) {
             VStack(spacing: 16) {
                 Image(systemName: "brain.head.profile")
-                    .font(.system(size: 60))
+                    .font(.system(size: 42))
                     .foregroundColor(.blue)
                 
                 Text("Choose AI Model")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 19.6, weight: .bold))
                 
                 Text("Select the Whisper model for transcription")
-                    .font(.title3)
+                    .font(.system(size: 9.1, weight: .regular))
                     .foregroundColor(.secondary)
             }
             
@@ -301,15 +298,14 @@ struct PermissionsSetupView: View {
         VStack(spacing: 30) {
             VStack(spacing: 16) {
                 Image(systemName: "lock.shield")
-                    .font(.system(size: 60))
+                    .font(.system(size: 42))
                     .foregroundColor(.blue)
                 
                 Text("Permissions Setup")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 19.6, weight: .bold))
                 
                 Text("WolfWhisper needs a few permissions to work properly")
-                    .font(.title3)
+                    .font(.system(size: 9.1, weight: .regular))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -483,15 +479,14 @@ struct HotkeySetupView: View {
         VStack(spacing: 30) {
             VStack(spacing: 16) {
                 Image(systemName: "command")
-                    .font(.system(size: 60))
+                    .font(.system(size: 42))
                     .foregroundColor(.blue)
                 
                 Text("Setup Hotkey")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 19.6, weight: .bold))
                 
                 Text("Choose a keyboard shortcut for global dictation")
-                    .font(.title3)
+                    .font(.system(size: 9.1, weight: .regular))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -652,7 +647,7 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline)
             .foregroundColor(.white)
-            .frame(minWidth: 120, minHeight: 44)
+            .frame(minWidth: 84, minHeight: 35)
             .background(Color.blue)
             .cornerRadius(12)
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
@@ -664,7 +659,7 @@ struct SecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline)
             .foregroundColor(.blue)
-            .frame(minWidth: 120, minHeight: 44)
+            .frame(minWidth: 84, minHeight: 35)
             .background(Color.clear)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
