@@ -48,24 +48,37 @@ struct ContentView: View {
                     
                     // Always update the main app UI to show the transcription
                     appState.updateState(to: .idle)
-                    appState.setTranscribedText(text)
-                    
-                    // Always copy to clipboard
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.setString(text, forType: .string)
-                    NSLog("DEBUG: Text copied to clipboard")
-                    
-                    if appState.wasRecordingStartedByHotkey {
-                        NSLog("DEBUG: ===== HOTKEY RECORDING PATH =====")
-                        NSLog("DEBUG: Showing in main app (background) and pasting to active window")
-                        
-                        // For hotkey recordings, also paste to the active window using new AXUIElement method
-                        hotkeyService.setTextToPaste(text)
-                        hotkeyService.pasteToActiveWindow()
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var isNonsense = false
+                    if trimmed.count >= 8 {
+                        let chars = Array(trimmed)
+                        let repeated = chars[1]
+                        if chars[1...7].allSatisfy({ $0 == repeated }) {
+                            isNonsense = true
+                        }
+                    }
+                    if trimmed.isEmpty || isNonsense {
+                        appState.transcribedText = "No speech detected"
+                        // Always copy to clipboard
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString("No speech detected", forType: .string)
+                        NSLog("DEBUG: 'No speech detected' copied to clipboard")
+                        if appState.wasRecordingStartedByHotkey {
+                            hotkeyService.setTextToPaste("No speech detected")
+                            hotkeyService.pasteToActiveWindow()
+                        }
                     } else {
-                        NSLog("DEBUG: ===== MANUAL RECORDING PATH =====")
-                        NSLog("DEBUG: Showing in main app only")
+                        appState.transcribedText = text
+                        // Always copy to clipboard
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(text, forType: .string)
+                        NSLog("DEBUG: Text copied to clipboard")
+                        if appState.wasRecordingStartedByHotkey {
+                            hotkeyService.setTextToPaste(text)
+                            hotkeyService.pasteToActiveWindow()
+                        }
                     }
                     
                 case .failure(let error):
@@ -255,7 +268,7 @@ struct MainAppView: View {
             .padding(.horizontal, 17.5)
             .padding(.bottom, 10.5)
         }
-        .frame(minWidth: 380)
+        .frame(width: 380, height: 420)
     }
     
 
@@ -545,7 +558,7 @@ struct ModernCompletedContent: View {
         }
         .onAppear {
             // After clipboard animation completes, show microphone icon
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     showMicrophoneIcon = true
                 }

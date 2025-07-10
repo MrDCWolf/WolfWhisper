@@ -7,14 +7,24 @@ struct OnboardingView: View {
     
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
+            // Modern app background (gradient + glass morphism)
+            GeometryReader { geometry in
+                ZStack {
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
+                            Color(red: 0.8, green: 0.6, blue: 0.4).opacity(0.3),
+                            Color(red: 0.5, green: 0.8, blue: 0.6).opacity(0.3)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.8)
+                }
+                .ignoresSafeArea()
+            }
             VStack {
                 switch appState.onboardingState {
                 case .welcome:
@@ -31,9 +41,76 @@ struct OnboardingView: View {
                     EmptyView()
                 }
             }
-            .padding(28)
-            .frame(maxWidth: 350, maxHeight: .infinity)
+            .padding(.horizontal, 28)
+            .frame(minWidth: 455, idealWidth: 455, maxWidth: 455, minHeight: 510, idealHeight: 510, maxHeight: 510)
         }
+    }
+}
+
+// Onboarding section container (unique name)
+struct OnboardingSection<Content: View>: View {
+    let title: String?
+    let content: Content
+    init(title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let title = title {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+            }
+            content
+        }
+        .padding(20)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
+    }
+}
+
+// Onboarding action button (unique name)
+struct OnboardingActionButton: View {
+    let title: String
+    let style: ButtonStyle
+    let action: () -> Void
+    enum ButtonStyle {
+        case primary, secondary, destructive
+        var foregroundColor: Color {
+            switch self {
+            case .primary: return .white
+            case .secondary: return .primary
+            case .destructive: return .red
+            }
+        }
+        var backgroundColor: Color {
+            switch self {
+            case .primary: return .blue
+            case .secondary: return .clear
+            case .destructive: return .clear
+            }
+        }
+    }
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11.2, weight: .medium, design: .rounded))
+                .foregroundStyle(style.foregroundColor)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .background(style.backgroundColor.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(style.foregroundColor.opacity(0.2), lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -42,44 +119,29 @@ struct WelcomeView: View {
     
     var body: some View {
         VStack(spacing: 30) {
-            // App Icon/Logo
             Image(systemName: "waveform")
                 .font(.system(size: 42))
                 .foregroundColor(.blue)
-            
             VStack(spacing: 16) {
                 Text("Welcome to WolfWhisper")
-                    .font(.system(size: 19.6, weight: .bold))
-                
+                    .font(.system(size: 19.6, weight: .bold, design: .rounded))
                 Text("AI-Powered Voice Dictation")
-                    .font(.system(size: 11.2, weight: .regular))
+                    .font(.system(size: 11.2, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
-            
             VStack(spacing: 12) {
                 FeatureRow(icon: "mic.fill", title: "High-Quality Transcription", description: "Powered by OpenAI's Whisper AI")
                 FeatureRow(icon: "keyboard", title: "Global Hotkey Support", description: "Dictate anywhere on your Mac")
                 FeatureRow(icon: "doc.on.clipboard", title: "Smart Clipboard", description: "Automatic text insertion")
                 FeatureRow(icon: "gear", title: "Customizable Settings", description: "Tailor the experience to your needs")
             }
-            
             Spacer()
-            
-            Button(action: {
+            OnboardingActionButton(title: "Get Started", style: .primary) {
                 appState.onboardingState = .apiKeySetup
-            }) {
-                Text("Get Started")
-                    .font(.system(size: 9.8, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.blue)
-                    .cornerRadius(12)
             }
-            .buttonStyle(PlainButtonStyle())
         }
-        .frame(maxWidth: 500)
-        .frame(maxHeight: .infinity)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
     }
 }
 
@@ -122,10 +184,10 @@ struct APIKeySetupView: View {
                     .foregroundColor(.blue)
                 
                 Text("OpenAI API Key")
-                    .font(.system(size: 19.6, weight: .bold))
+                    .font(.system(size: 19.6, weight: .bold, design: .rounded))
                 
                 Text("Enter your OpenAI API key to enable voice transcription")
-                    .font(.system(size: 9.1, weight: .regular))
+                    .font(.system(size: 9.1, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -149,23 +211,13 @@ struct APIKeySetupView: View {
             
             VStack(spacing: 16) {
                 HStack(spacing: 16) {
-                    Button("Back") {
+                    OnboardingActionButton(title: "Back", style: .secondary) {
                         appState.onboardingState = .welcome
                     }
-                    .buttonStyle(SecondaryButtonStyle())
                     
-                    Button(action: validateAndContinue) {
-                        if isValidating {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Validating...")
-                            }
-                        } else {
-                            Text("Continue")
-                        }
+                    OnboardingActionButton(title: "Continue", style: .primary) {
+                        validateAndContinue()
                     }
-                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(apiKey.isEmpty || isValidating)
                 }
                 
@@ -173,9 +225,13 @@ struct APIKeySetupView: View {
                 Spacer().frame(height: 20)
             }
         }
-        .frame(maxWidth: 500)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
         .onAppear {
-            apiKey = appState.settings.apiKey
+            // Pre-fill API key from appState.settings if available
+            if apiKey.isEmpty, !appState.settings.apiKey.isEmpty {
+                apiKey = appState.settings.apiKey
+            }
         }
     }
     
@@ -213,10 +269,10 @@ struct ModelSelectionView: View {
                     .foregroundColor(.blue)
                 
                 Text("Choose AI Model")
-                    .font(.system(size: 19.6, weight: .bold))
+                    .font(.system(size: 19.6, weight: .bold, design: .rounded))
                 
                 Text("Select the Whisper model for transcription")
-                    .font(.system(size: 9.1, weight: .regular))
+                    .font(.system(size: 9.1, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
             
@@ -235,19 +291,18 @@ struct ModelSelectionView: View {
             Spacer()
             
             HStack(spacing: 16) {
-                Button("Back") {
+                OnboardingActionButton(title: "Back", style: .secondary) {
                     appState.onboardingState = .apiKeySetup
                 }
-                .buttonStyle(SecondaryButtonStyle())
                 
-                Button("Continue") {
+                OnboardingActionButton(title: "Continue", style: .primary) {
                     appState.settings.saveSettings()
                     appState.onboardingState = .permissionsSetup
                 }
-                .buttonStyle(PrimaryButtonStyle())
             }
         }
-        .frame(maxWidth: 500)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
     }
     
 
@@ -302,10 +357,10 @@ struct PermissionsSetupView: View {
                     .foregroundColor(.blue)
                 
                 Text("Permissions Setup")
-                    .font(.system(size: 19.6, weight: .bold))
+                    .font(.system(size: 19.6, weight: .bold, design: .rounded))
                 
                 Text("WolfWhisper needs a few permissions to work properly")
-                    .font(.system(size: 9.1, weight: .regular))
+                    .font(.system(size: 9.1, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -322,7 +377,7 @@ struct PermissionsSetupView: View {
                 PermissionRow(
                     icon: "keyboard",
                     title: "Accessibility Access",
-                    description: "Required for global hotkey and text insertion",
+                    description: "Required to paste into all windows",
                     status: accessibilityPermission ? .granted : .pending,
                     action: requestAccessibilityPermission
                 )
@@ -331,21 +386,22 @@ struct PermissionsSetupView: View {
             Spacer()
             
             HStack(spacing: 16) {
-                Button("Back") {
+                OnboardingActionButton(title: "Back", style: .secondary) {
                     appState.onboardingState = .modelSelection
                 }
-                .buttonStyle(SecondaryButtonStyle())
                 
-                Button("Continue") {
+                OnboardingActionButton(title: "Continue", style: .primary) {
                     appState.onboardingState = .hotkeySetup
                 }
-                .buttonStyle(PrimaryButtonStyle())
                 .disabled(microphonePermission != .authorized)
             }
         }
-        .frame(maxWidth: 500)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
         .onAppear {
-            checkPermissions()
+            // Pre-fill permission states from system
+            microphonePermission = AVCaptureDevice.authorizationStatus(for: .audio)
+            accessibilityPermission = AXIsProcessTrusted()
         }
     }
     
@@ -483,10 +539,10 @@ struct HotkeySetupView: View {
                     .foregroundColor(.blue)
                 
                 Text("Setup Hotkey")
-                    .font(.system(size: 19.6, weight: .bold))
+                    .font(.system(size: 19.6, weight: .bold, design: .rounded))
                 
                 Text("Choose a keyboard shortcut for global dictation")
-                    .font(.system(size: 9.1, weight: .regular))
+                    .font(.system(size: 9.1, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -514,11 +570,15 @@ struct HotkeySetupView: View {
                         }
                     }) {
                         Text(isRecordingHotkey ? "Recording... Press ESC to cancel" : "Change Hotkey")
-                            .foregroundColor(isRecordingHotkey ? .orange : .blue)
+                            .foregroundColor(.white)
+                            .fontWeight(.semibold)
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(isRecordingHotkey ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1))
-                            .cornerRadius(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.accentColor)
+                                    .shadow(color: Color.black.opacity(0.10), radius: 2, x: 0, y: 1)
+                            )
                     }
                     .buttonStyle(PlainButtonStyle())
                     
@@ -559,20 +619,19 @@ struct HotkeySetupView: View {
             Spacer()
             
             HStack(spacing: 16) {
-                Button("Back") {
+                OnboardingActionButton(title: "Back", style: .secondary) {
                     appState.onboardingState = .permissionsSetup
                 }
-                .buttonStyle(SecondaryButtonStyle())
                 
-                Button("Complete Setup") {
+                OnboardingActionButton(title: "Complete Setup", style: .primary) {
                     // Now save everything including to keychain
                     appState.settings.saveSettings()
                     appState.completeOnboarding()
                 }
-                .buttonStyle(PrimaryButtonStyle())
             }
         }
-        .frame(maxWidth: 500)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
     }
     
     private func startRecording() {
@@ -638,33 +697,5 @@ struct HotkeySetupView: View {
         }
         
         return (modifiers: modifierFlags, key: keyCode)
-    }
-}
-
-// Custom button styles
-struct PrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundColor(.white)
-            .frame(minWidth: 84, minHeight: 35)
-            .background(Color.blue)
-            .cornerRadius(12)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundColor(.blue)
-            .frame(minWidth: 84, minHeight: 35)
-            .background(Color.clear)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.blue, lineWidth: 2)
-            )
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
     }
 } 

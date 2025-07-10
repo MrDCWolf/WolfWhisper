@@ -104,48 +104,37 @@ struct FloatingRecordingView: View {
     
     var body: some View {
         ZStack {
-            // Enhanced glass morphism background with multiple layers
-            ZStack {
-                // Base glass layer
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(.regularMaterial)
-                    .opacity(0.7)
-                
-                // Additional blur layer for depth
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.8)
-                
-                // Subtle gradient overlay for glass effect
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.25),
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+            // Match main app/settings gradient background
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
+                            Color(red: 0.8, green: 0.6, blue: 0.4).opacity(0.3),
+                            Color(red: 0.5, green: 0.8, blue: 0.6).opacity(0.3)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-            }
-            .overlay(
-                // Glass border with subtle glow
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.6),
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
-            )
+                )
+            // Overlay glass morphism effect
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.8)
+            // Glass border with subtle glow
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.6),
+                            Color.white.opacity(0.3),
+                            Color.white.opacity(0.1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
             .shadow(color: Color.black.opacity(0.3), radius: 30, x: 0, y: 12)
             .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
             .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
