@@ -48,7 +48,9 @@ struct ContentView: View {
                     
                     // Always update the main app UI to show the transcription
                     appState.updateState(to: .idle)
-                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let hasNormalChars = trimmed.range(of: "[A-Za-z0-9]", options: .regularExpression) != nil
+                    if trimmed.isEmpty || !hasNormalChars {
                         appState.transcribedText = "No speech detected"
                     } else {
                         appState.transcribedText = text
