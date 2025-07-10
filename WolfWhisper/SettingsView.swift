@@ -100,7 +100,7 @@ struct SettingsView: View {
                         case .hotkeys:
                             ModernHotkeySettingsView(settings: appState.settings)
                         case .advanced:
-                            ModernAdvancedSettingsView(settings: appState.settings)
+                            ModernAdvancedSettingsView(appState: appState, settings: appState.settings)
                         }
                     }
                     .frame(minWidth: 500, minHeight: 400)
@@ -302,6 +302,7 @@ struct ModernHotkeySettingsView: View {
 }
 
 struct ModernAdvancedSettingsView: View {
+    @ObservedObject var appState: AppStateModel
     @ObservedObject var settings: SettingsModel
     @State private var showingResetAlert = false
     
@@ -352,7 +353,8 @@ struct ModernAdvancedSettingsView: View {
                             title: "Check Permissions",
                             style: .secondary
                         ) {
-                            settings.checkAllPermissions()
+                            appState.isFirstLaunch = true
+                            appState.onboardingState = .welcome
                         }
                     }
                     .frame(maxWidth: 600)
