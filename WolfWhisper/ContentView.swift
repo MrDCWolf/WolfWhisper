@@ -66,11 +66,20 @@ struct ContentView: View {
                     } else {
                         appState.lastTranscriptionSuccessful = true
                         appState.transcribedText = text
-                        appState.updateState(to: .idle)
                         
                         let pasteboard = NSPasteboard.general
                         pasteboard.clearContents()
                         pasteboard.setString(text, forType: .string)
+                        
+                        // Show clipboard feedback with animation
+                        appState.updateState(to: .idle, message: "Copied to clipboard! ✓")
+                        
+                        // Reset to normal status after a brief delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            if appState.currentState == .idle {
+                                appState.updateState(to: .idle) // This will reset to "Ready to record"
+                            }
+                        }
                         
                         if appState.wasRecordingStartedByHotkey {
                             hotkeyService?.setTextToPaste(text)
@@ -190,8 +199,8 @@ struct MainAppView: View {
                     Text(appState.statusText)
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
-                        // .transition(.opacity.combined(with: .scale))
-                        // .animation(.easeInOut(duration: 0.3), value: appState.statusText)
+                        .transition(.opacity.combined(with: .scale))
+                        .animation(.easeInOut(duration: 0.3), value: appState.statusText)
                 }
                 
                 ModernTranscriptionPanel(text: appState.transcribedText)
@@ -678,47 +687,88 @@ struct MiniClipboardVisualizer: View {
     @State private var showCompleted = false
     @State private var pulseScale: CGFloat = 1.0
     @State private var animationTask: DispatchWorkItem?
+    @State private var sparkleOpacity: Double = 0.0
+    @State private var sparkleScale: CGFloat = 0.5
+    @State private var rotationAngle: Double = 0.0
 
     var body: some View {
         ZStack {
-            if showCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color.blue.opacity(0.8),
-                                Color.cyan.opacity(0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            // Sparkle effects around the clipboard
+            if !showCompleted {
+                ForEach(0..<6, id: \.self) { index in
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundColor(.blue.opacity(0.6))
+                        .scaleEffect(sparkleScale)
+                        .opacity(sparkleOpacity)
+                        .offset(
+                            x: cos(Double(index) * .pi / 3 + rotationAngle) * 20,
+                            y: sin(Double(index) * .pi / 3 + rotationAngle) * 20
                         )
-                    )
-                    .scaleEffect(pulseScale)
-                    .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
-            } else {
+                }
+            }
+            
+            if showCompleted {
+                // Success checkmark with enhanced animation
                 ZStack {
                     Circle()
                         .fill(
                             RadialGradient(
                                 colors: [
-                                    Color.blue.opacity(0.3),
-                                    Color.blue.opacity(0.1),
+                                    Color.green.opacity(0.3),
+                                    Color.green.opacity(0.1),
                                     Color.clear
                                 ],
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 12
+                                endRadius: 15
                             )
                         )
-                        .frame(width: 24, height: 24)
+                        .frame(width: 30, height: 30)
+                        .scaleEffect(pulseScale)
+                    
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.green.opacity(0.9),
+                                    Color.mint.opacity(0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .scaleEffect(pulseScale)
+                        .shadow(color: Color.green.opacity(0.3), radius: 3, x: 0, y: 1)
+                }
+                .transition(.scale.combined(with: .opacity))
+            } else {
+                // Clipboard icon with enhanced animation
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.blue.opacity(0.4),
+                                    Color.blue.opacity(0.2),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 15
+                            )
+                        )
+                        .frame(width: 30, height: 30)
                         .scaleEffect(pulseScale)
                     
                     Image(systemName: "clipboard")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.blue)
                         .scaleEffect(pulseScale)
+                        .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
                 }
+                .transition(.scale.combined(with: .opacity))
             }
         }
         .onAppear(perform: startAnimation)
@@ -726,17 +776,44 @@ struct MiniClipboardVisualizer: View {
     }
     
     private func startAnimation() {
-        withAnimation(.easeInOut(duration: 0.4)) {
-            pulseScale = 1.2
+        // Initial pulse animation
+        withAnimation(.easeInOut(duration: 0.3)) {
+            pulseScale = 1.3
         }
+        
+        // Sparkle animation
+        withAnimation(.easeInOut(duration: 0.4).delay(0.1)) {
+            sparkleOpacity = 1.0
+            sparkleScale = 1.0
+        }
+        
+        // Rotation animation for sparkles
+        withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
+            rotationAngle = 2 * .pi
+        }
+        
+        // Transition to completed state
         let task = DispatchWorkItem {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8, blendDuration: 0)) {
                 self.showCompleted = true
                 self.pulseScale = 1.0
+                self.sparkleOpacity = 0.0
+            }
+            
+            // Final success pulse
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.pulseScale = 1.2
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        self.pulseScale = 1.0
+                    }
+                }
             }
         }
         self.animationTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: task)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: task)
     }
     
     private func cancelAnimation() {
