@@ -107,10 +107,6 @@ struct WolfWhisperApp: App {
                         }
                     }
                 },
-                onOpenSettings: {
-                    NSApp.activate(ignoringOtherApps: true)
-                    appState.showSettings = true
-                },
                 onQuit: {
                     NSApplication.shared.terminate(nil)
                 }
@@ -309,6 +305,8 @@ struct SettingsMenuButton: View {
 
 // Isolated menu bar content view to prevent constant updates
 struct MenuBarContentView: View {
+    @Environment(\.openWindow) private var openWindow
+    
     let currentState: AppState
     let audioLevels: [Float]
     let statusText: String
@@ -316,7 +314,6 @@ struct MenuBarContentView: View {
     let showInMenuBar: Bool
     let onStartRecording: () -> Void
     let onStopRecording: () -> Void
-    let onOpenSettings: () -> Void
     let onQuit: () -> Void
     
     var body: some View {
@@ -381,7 +378,10 @@ struct MenuBarContentView: View {
                             title: "Settings",
                             systemImage: "gearshape.fill",
                             isEnabled: true,
-                            action: onOpenSettings
+                            action: {
+                                NSApp.activate(ignoringOtherApps: true)
+                                openWindow(id: "settings")
+                            }
                         )
                         MenuBarActionButton(
                             title: "Quit WolfWhisper",
@@ -402,7 +402,8 @@ struct MenuBarContentView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Button("Enable in Settings") {
-                    onOpenSettings()
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: "settings")
                 }
             }
             .padding(8)
