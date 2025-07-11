@@ -73,17 +73,17 @@ struct SettingsView: View {
                             .padding(.horizontal, 20)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("WolfWhisper")
-                                .font(.system(size: 8.4, weight: .medium, design: .rounded))
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Text("Version 1.5")
-                                .font(.system(size: 7.7, weight: .regular))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 20)
                     }
                 }
-                .frame(width: 154)
+                .frame(width: 160)
                 .background(.ultraThinMaterial)
                 // Modern Content
                 ZStack {
@@ -178,14 +178,14 @@ struct ModernSettingsField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 11.2, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
             
             content
             
             if let description = description {
                 Text(description)
-                    .font(.system(size: 9.8, weight: .regular))
+                    .font(.system(size: 10.5, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         }
@@ -199,7 +199,7 @@ struct ModernToggle: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 11.2, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
             
             Spacer()
@@ -238,7 +238,7 @@ struct ModernAudioSettingsView: View {
                         ) {
                             HStack {
                                 Text(currentMicrophone)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
                                 Spacer()
                             }
@@ -364,19 +364,19 @@ struct ModernAdvancedSettingsView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Version:")
-                                .font(.system(size: 11.2, weight: .medium))
+                                .font(.system(size: 10.5, weight: .regular, design: .rounded))
                             Spacer()
                             Text("1.5")
-                                .font(.system(size: 11.2, weight: .regular))
+                                .font(.system(size: 10.5, weight: .regular, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         Divider()
                             .background(.white.opacity(0.2))
                         VStack(alignment: .leading, spacing: 8) {
                             Link("View on GitHub", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper")!)
-                                .font(.system(size: 11.2, weight: .medium))
+                                .font(.system(size: 10.5, weight: .regular, design: .rounded))
                             Link("Report Issue", destination: URL(string: "https://github.com/MrDCWolf/WolfWhisper/issues")!)
-                                .font(.system(size: 11.2, weight: .medium))
+                                .font(.system(size: 10.5, weight: .regular, design: .rounded))
                         }
                     }
                     .frame(maxWidth: 600)
@@ -423,7 +423,7 @@ struct ModernActionButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 9.8, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(style.foregroundColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
@@ -489,7 +489,7 @@ struct ModernSidebarTab: View {
                     .frame(width: 20)
                 
                 Text(tab.rawValue)
-                    .font(.system(size: 11.2, weight: .medium, design: .rounded))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(isSelected ? .blue : .primary)
                 
                 Spacer()
