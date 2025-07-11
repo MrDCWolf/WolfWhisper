@@ -416,8 +416,10 @@ class AppStateModel: ObservableObject {
         isCPUMonitoringActive = true
         cpuTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            let info = ProcessInfo.processInfo
-            print("CPU Usage Debug - Active Threads: \(Thread.callStackSymbols.count), State: \(self.currentState)")
+            let _ = ProcessInfo.processInfo
+            Task { @MainActor in
+                print("CPU Usage Debug - Active Threads: \(Thread.callStackSymbols.count), State: \(self.currentState)")
+            }
         }
     }
     func stopCPUMonitoring() {

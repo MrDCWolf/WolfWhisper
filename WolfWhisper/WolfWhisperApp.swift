@@ -38,6 +38,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// Custom window delegate to prevent main window from closing
+class NonClosableWindowDelegate: NSObject, NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Prevent window from closing - minimize instead
+        sender.miniaturize(nil)
+        return false
+    }
+}
+
 @main
 struct WolfWhisperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -45,13 +54,30 @@ struct WolfWhisperApp: App {
     @State private var floatingRecordingWindow: NSWindow?
     @State private var floatingWindowDelegate: FloatingWindowDelegate?
     @State private var notificationObserver: NSObjectProtocol?
+    @State private var windowDelegate = NonClosableWindowDelegate()
     
     var body: some Scene {
         WindowGroup {
             if appState.isFirstLaunch {
                 OnboardingView(appState: appState)
+                    .onAppear {
+                        // Set the delegate when onboarding appears to prevent closing
+                        DispatchQueue.main.async {
+                            if let window = NSApplication.shared.windows.first {
+                                window.delegate = windowDelegate
+                            }
+                        }
+                    }
             } else {
                 ContentView(appState: appState)
+                    .onAppear {
+                        // Set the delegate when content appears to prevent closing
+                        DispatchQueue.main.async {
+                            if let window = NSApplication.shared.windows.first {
+                                window.delegate = windowDelegate
+                            }
+                        }
+                    }
             }
         }
         .windowResizability(.contentSize)
