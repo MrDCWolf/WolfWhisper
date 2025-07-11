@@ -28,6 +28,9 @@ struct WaveformView: View {
                 startAnimation()
             }
         }
+        .onDisappear {
+            animationPhase = 0
+        }
         .onChange(of: isRecording) { _, recording in
             if recording {
                 startAnimation()
@@ -160,6 +163,9 @@ struct RecordingButton: View {
             if recording {
                 startPulseAnimation()
             }
+        }
+        .onDisappear {
+            pulseScale = 1.0
         }
     }
     

@@ -30,5 +30,10 @@
 	<string>WolfWhisper needs to access the microphone to record your voice for transcription.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>WolfWhisper needs to use Speech Recognition to transcribe your voice recordings.</string>
+	<key>SMLoginItem</key>
+	<dict>
+		<key>Enabled</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

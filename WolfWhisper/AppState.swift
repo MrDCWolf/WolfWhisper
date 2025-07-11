@@ -252,9 +252,15 @@ class AppStateModel: ObservableObject {
     @Published var wasRecordingStartedByHotkey: Bool = false
     @Published var needsSetup: Bool = false
     @Published var debugInfo: String = "Debug: No transcription yet"
+    @Published var lastTranscriptionSuccessful: Bool = false
     
     // Settings
     @Published var settings = SettingsModel()
+    
+    #if DEBUG
+    private var cpuTimer: Timer?
+    private(set) var isCPUMonitoringActive: Bool = false
+    #endif
     
     init() {
         checkFirstLaunch()
@@ -276,6 +282,12 @@ class AppStateModel: ObservableObject {
     }
     
     func updateState(to newState: AppState, message: String? = nil) {
+        // CRITICAL FIX: If we are transitioning TO the idle state,
+        // ensure all audio resources are forcefully cleaned up.
+        if newState == .idle && currentState != .idle {
+            AudioService.shared.forceCleanup()
+        }
+        
         currentState = newState
         
         if let message = message {
@@ -356,6 +368,8 @@ class AppStateModel: ObservableObject {
             return
         }
         await MainActor.run {
+            // Reset transcription success flag at the start of each recording
+            lastTranscriptionSuccessful = false
             updateState(to: .recording)
             debugInfo = "Debug: Starting recording..."
         }
@@ -386,4 +400,21 @@ class AppStateModel: ObservableObject {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
     }
+    
+    #if DEBUG
+    func startCPUMonitoring() {
+        guard !isCPUMonitoringActive else { return }
+        isCPUMonitoringActive = true
+        cpuTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let info = ProcessInfo.processInfo
+            print("CPU Usage Debug - Active Threads: \(Thread.callStackSymbols.count), State: \(self.currentState)")
+        }
+    }
+    func stopCPUMonitoring() {
+        cpuTimer?.invalidate()
+        cpuTimer = nil
+        isCPUMonitoringActive = false
+    }
+    #endif
 } 

@@ -14,10 +14,6 @@ class AudioService: NSObject, ObservableObject {
     var onStateChange: ((AppState) -> Void)?
     var onAudioLevelsUpdate: (([Float]) -> Void)?
     
-    private override init() {
-        super.init()
-    }
-    
     func getCurrentMicrophoneName() -> String {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
@@ -95,8 +91,7 @@ class AudioService: NSObject, ObservableObject {
             audioRecorder?.isMeteringEnabled = true
             
             // Start recording
-            let success = audioRecorder?.record()
-            if success == true {
+            if audioRecorder?.record() == true {
                 onStateChange?(.recording)
                 startLevelMonitoring()
             } else {
@@ -143,9 +138,24 @@ class AudioService: NSObject, ObservableObject {
     private func stopLevelMonitoring() {
         levelTimer?.invalidate()
         levelTimer = nil
-        
-        // Send empty levels to reset the UI
+        audioRecorder?.isMeteringEnabled = false
         onAudioLevelsUpdate?([])
+    }
+    
+    // Force cleanup of all resources - called when app goes idle
+    func forceCleanup() {
+        stopLevelMonitoring()
+        audioRecorder?.stop()
+        audioRecorder = nil
+        // Clean up recording file if it exists
+        if let url = recordingURL {
+            try? FileManager.default.removeItem(at: url)
+            recordingURL = nil
+        }
+        // Clear all callbacks to prevent leaks
+        onStateChange = nil
+        onAudioLevelsUpdate = nil
+        // If you add any observers or background threads, stop/cleanup them here as well
     }
     
     private func updateAudioLevels() {
@@ -162,7 +172,6 @@ class AudioService: NSObject, ObservableObject {
         let normalizedPeak = normalizeAudioLevel(peakPower)
         
         // Create an array of levels for the waveform visualization
-        // We'll simulate multiple bars by adding some variation
         var levels: [Float] = []
         let baseLevel = normalizedAverage
         
@@ -185,7 +194,6 @@ class AudioService: NSObject, ObservableObject {
     
     private func normalizeAudioLevel(_ decibels: Float) -> Float {
         // Convert dB to linear scale with better responsiveness
-        // -50 dB is considered silence (was -60), 0 dB is maximum
         let minDB: Float = -50.0
         let maxDB: Float = 0.0
         

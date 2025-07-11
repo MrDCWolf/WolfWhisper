@@ -29,8 +29,18 @@ class NonFocusingWindow: NSWindow {
     override var canBecomeMain: Bool { false }
 }
 
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Force cleanup of all services
+        AudioService.shared.forceCleanup()
+        HotkeyService.shared.unregisterHotkey()
+        return false // Do NOT quit the app when the last window closes
+    }
+}
+
 @main
 struct WolfWhisperApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppStateModel()
     @State private var floatingRecordingWindow: NSWindow?
     @State private var floatingWindowDelegate: FloatingWindowDelegate?
@@ -66,25 +76,59 @@ struct WolfWhisperApp: App {
         .defaultPosition(.center)
         .handlesExternalEvents(matching: Set(arrayLiteral: "settings"))
         
-        // Menu Bar Extra - Fixed to avoid publishing loop by removing binding
+        // Menu Bar Extra - Using isolated content view to prevent constant updates
         MenuBarExtra("WolfWhisper", systemImage: "pawprint.circle.fill") {
-            MenuBarView(appState: appState)
+            MenuBarContentView(
+                currentState: appState.currentState,
+                audioLevels: appState.audioLevels,
+                statusText: appState.statusText,
+                hotkeyDisplay: appState.settings.hotkeyDisplay,
+                showInMenuBar: appState.settings.showInMenuBar,
+                onStartRecording: {
+                    Task { await appState.startRecordingFromMenuBar() }
+                },
+                onStopRecording: {
+                    Task {
+                        do {
+                            let audioData = try await AudioService.shared.stopRecording()
+                            await MainActor.run {
+                                appState.updateState(to: .transcribing)
+                            }
+                            // Transcribe the audio
+                            try await TranscriptionService.shared.transcribe(
+                                audioData: audioData,
+                                apiKey: appState.settings.apiKey,
+                                model: appState.settings.selectedModel.rawValue
+                            )
+                        } catch {
+                            await MainActor.run {
+                                appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                },
+                onOpenSettings: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    appState.showSettings = true
+                },
+                onQuit: {
+                    NSApplication.shared.terminate(nil)
+                }
+            )
         }
         .menuBarExtraStyle(.window)
     }
     
     private func handleStateChange(_ newState: AppState) {
-        // Show floating window only when starting recording
-        if newState == .recording {
+        switch newState {
+        case .recording, .transcribing:
+            // Always destroy and recreate the floating window for recording/transcribing states
+            cleanupFloatingWindow()
             showFloatingRecordingWindow()
-        } else if newState == .transcribing {
-            // Window should already be visible, just ensure it stays open
-            // No need to call showFloatingRecordingWindow() again
-        } else if newState == .idle && floatingRecordingWindow?.isVisible == true {
-            // Hide floating window after a short delay to show completion state
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                self.hideFloatingRecordingWindow()
-            }
+        case .idle:
+            // Don't destroy the window immediately on .idle
+            // Let FloatingRecordingView handle its own cleanup after clipboard animation
+            break
         }
     }
     
@@ -96,6 +140,7 @@ struct WolfWhisperApp: App {
         
         // Create fresh window every time
         let recordingView = FloatingRecordingView(appState: appState)
+            .id(appState.currentState)
         let hostingController = NSHostingController(rootView: recordingView)
         
         // Create borderless floating panel
@@ -173,16 +218,18 @@ struct WolfWhisperApp: App {
         }
     }
     
-    private func cleanupFloatingWindow() {
+        private func cleanupFloatingWindow() {
         // Remove notification observer
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
             notificationObserver = nil
         }
-        
+
         // Close window if it exists
-        floatingRecordingWindow?.close()
-        
+        if floatingRecordingWindow != nil {
+            floatingRecordingWindow?.close()
+        }
+
         // Clear references
         floatingRecordingWindow = nil
         floatingWindowDelegate = nil
@@ -245,7 +292,6 @@ struct SettingsMenuButton: View {
     
     var body: some View {
         Button("Settings...") {
-            print("DEBUG: Settings menu item clicked")
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "settings")
         }
@@ -253,12 +299,20 @@ struct SettingsMenuButton: View {
     }
 }
 
-struct MenuBarView: View {
-    @ObservedObject var appState: AppStateModel
-    @Environment(\.openWindow) private var openWindow
+// Isolated menu bar content view to prevent constant updates
+struct MenuBarContentView: View {
+    let currentState: AppState
+    let audioLevels: [Float]
+    let statusText: String
+    let hotkeyDisplay: String
+    let showInMenuBar: Bool
+    let onStartRecording: () -> Void
+    let onStopRecording: () -> Void
+    let onOpenSettings: () -> Void
+    let onQuit: () -> Void
     
     var body: some View {
-        if appState.settings.showInMenuBar {
+        if showInMenuBar {
             ZStack {
                 // Glassmorphic background
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -276,7 +330,7 @@ struct MenuBarView: View {
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(.blue)
                         }
-                        Text(appState.statusText)
+                        Text(statusText)
                             .font(.body)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
@@ -287,8 +341,8 @@ struct MenuBarView: View {
                     .padding(.bottom, 8)
                     
                     // Optional: Compact waveform when recording
-                    if appState.currentState == .recording {
-                        CompactWaveformView(audioLevels: appState.audioLevels, isRecording: true)
+                    if currentState == .recording {
+                        CompactWaveformView(audioLevels: audioLevels, isRecording: true)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 8)
                     }
@@ -298,59 +352,34 @@ struct MenuBarView: View {
                     
                     // Quick Actions
                     VStack(spacing: 0) {
-                        if appState.currentState == .recording {
+                        if currentState == .recording {
                             MenuBarActionButton(
                                 title: "Stop Recording",
                                 systemImage: "stop.circle",
                                 isEnabled: true,
-                                action: {
-                                    Task {
-                                        do {
-                                            let audioData = try await AudioService.shared.stopRecording()
-                                            await MainActor.run {
-                                                appState.updateState(to: .transcribing)
-                                            }
-                                            // Transcribe the audio
-                                            try await TranscriptionService.shared.transcribe(
-                                                audioData: audioData,
-                                                apiKey: appState.settings.apiKey,
-                                                model: appState.settings.selectedModel.rawValue
-                                            )
-                                        } catch {
-                                            await MainActor.run {
-                                                appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
-                                            }
-                                        }
-                                    }
-                                }
+                                action: onStopRecording
                             )
                         } else {
                             MenuBarActionButton(
-                                title: "Start Recording (\(appState.settings.hotkeyDisplay))",
+                                title: "Start Recording (\(hotkeyDisplay))",
                                 systemImage: "record.circle",
-                                isEnabled: appState.currentState == .idle,
-                                action: {
-                                    Task { 
-                                        await appState.startRecordingFromMenuBar() 
-                                    }
-                                }
+                                isEnabled: currentState == .idle,
+                                action: onStartRecording
                             )
                         }
+                        
                         // Open Settings
                         MenuBarActionButton(
                             title: "Settings",
                             systemImage: "gearshape.fill",
                             isEnabled: true,
-                            action: {
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "settings")
-                            }
+                            action: onOpenSettings
                         )
                         MenuBarActionButton(
                             title: "Quit WolfWhisper",
                             systemImage: "power",
                             isEnabled: true,
-                            action: { NSApplication.shared.terminate(nil) }
+                            action: onQuit
                         )
                     }
                     .padding(.horizontal, 8)
@@ -365,7 +394,7 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Button("Enable in Settings") {
-                    openWindow(id: "settings")
+                    onOpenSettings()
                 }
             }
             .padding(8)
@@ -373,6 +402,8 @@ struct MenuBarView: View {
         }
     }
 }
+
+
 
 // Modern action button for menu bar
 struct MenuBarActionButton: View {

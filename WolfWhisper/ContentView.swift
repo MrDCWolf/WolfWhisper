@@ -6,12 +6,26 @@ struct ContentView: View {
     @StateObject private var audioService = AudioService.shared
     @StateObject private var transcriptionService = TranscriptionService.shared
     @StateObject private var hotkeyService = HotkeyService.shared
+    @State private var isWindowVisible = true
     
     var body: some View {
-        MainAppView(appState: appState)
+        MainAppView(appState: appState, isWindowVisible: isWindowVisible)
         .onAppear {
             setupServices()
             setupHotkey()
+        }
+        .onDisappear {
+            // CRITICAL FIX: Clear callbacks to break retain cycles and allow the view to deallocate.
+            audioService.onStateChange = nil
+            audioService.onAudioLevelsUpdate = nil
+            transcriptionService.onTranscriptionComplete = nil
+            hotkeyService.onHotkeyPressed = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            isWindowVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            isWindowVisible = false
         }
         .onChange(of: appState.settings.hotkeyEnabled) {
             setupHotkey()
@@ -26,30 +40,23 @@ struct ContentView: View {
     
     private func setupServices() {
         // Set up audio service callbacks
-        audioService.onStateChange = { state in
-            appState.updateState(to: state)
+        audioService.onStateChange = { [weak appState] state in
+            appState?.updateState(to: state)
         }
         
-        audioService.onAudioLevelsUpdate = { levels in
-            appState.updateAudioLevels(levels)
+        audioService.onAudioLevelsUpdate = { [weak appState] levels in
+            appState?.updateAudioLevels(levels)
         }
         
-        // Set up transcription service callback
-        transcriptionService.onTranscriptionComplete = { result in
+        // Set up transcription service callback, capturing state objects weakly to prevent retain cycles.
+        transcriptionService.onTranscriptionComplete = { [weak appState, weak hotkeyService] result in
+            guard let appState = appState else { return }
             Task { @MainActor in
-                appState.debugInfo = "Debug: Transcription callback called!"
-                NSLog("DEBUG: ==================== TRANSCRIPTION CALLBACK ====================")
-                NSLog("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-                
                 switch result {
                 case .success(let text):
-                    appState.debugInfo = "Debug: Got transcription: '\(text)' (length: \(text.count))"
-                    NSLog("DEBUG: Got transcription: '\(text)' (length: \(text.count))")
-                    
-                    // Always update the main app UI to show the transcription
-                    appState.updateState(to: .idle)
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     var isNonsense = false
+                    
                     if trimmed.count >= 8 {
                         let chars = Array(trimmed)
                         let repeated = chars[1]
@@ -57,44 +64,77 @@ struct ContentView: View {
                             isNonsense = true
                         }
                     }
+                    
                     if trimmed.isEmpty || isNonsense {
+                        appState.lastTranscriptionSuccessful = false
                         appState.transcribedText = "No speech detected"
-                        // Always copy to clipboard
-                        let pasteboard = NSPasteboard.general
-                        pasteboard.clearContents()
-                        pasteboard.setString("No speech detected", forType: .string)
-                        NSLog("DEBUG: 'No speech detected' copied to clipboard")
-                        if appState.wasRecordingStartedByHotkey {
-                            hotkeyService.setTextToPaste("No speech detected")
-                            hotkeyService.pasteToActiveWindow()
-                        }
+                        appState.updateState(to: .idle, message: "No speech detected")
                     } else {
+                        appState.lastTranscriptionSuccessful = true
                         appState.transcribedText = text
-                        // Always copy to clipboard
+                        appState.updateState(to: .idle)
+                        
                         let pasteboard = NSPasteboard.general
                         pasteboard.clearContents()
                         pasteboard.setString(text, forType: .string)
-                        NSLog("DEBUG: Text copied to clipboard")
+                        
                         if appState.wasRecordingStartedByHotkey {
-                            hotkeyService.setTextToPaste(text)
-                            hotkeyService.pasteToActiveWindow()
+                            hotkeyService?.setTextToPaste(text)
+                            hotkeyService?.pasteToActiveWindow()
                         }
                     }
-                    
                 case .failure(let error):
-                    appState.debugInfo = "Debug: Transcription failed: \(error.localizedDescription)"
-                    NSLog("DEBUG: Transcription failed: \(error.localizedDescription)")
+                    appState.lastTranscriptionSuccessful = false
                     appState.updateState(to: .idle, message: "Error: \(error.localizedDescription)")
                 }
                 
-                NSLog("DEBUG: Resetting wasRecordingStartedByHotkey flag")
                 appState.wasRecordingStartedByHotkey = false
             }
         }
         
-        // Set up hotkey callback
-        hotkeyService.onHotkeyPressed = {
-            handleHotkeyPressed()
+        // Set up hotkey callback, moving logic inside and capturing weakly to prevent retain cycles.
+        hotkeyService.onHotkeyPressed = { [weak appState, weak audioService, weak transcriptionService] in
+            guard let appState = appState else { return }
+            appState.wasRecordingStartedByHotkey = true
+            
+            if appState.currentState == .idle {
+                appState.lastTranscriptionSuccessful = false
+                guard appState.settings.isConfigured else {
+                    appState.showSettings = true
+                    return
+                }
+                Task {
+                    do {
+                        try await audioService?.startRecording()
+                    } catch {
+                        await MainActor.run {
+                            appState.updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
+                        }
+                    }
+                }
+            } else if appState.currentState == .recording {
+                Task {
+                    do {
+                        guard let audioService = audioService,
+                              let transcriptionService = transcriptionService else { return }
+                        let audioData = try await audioService.stopRecording()
+                        
+                        await MainActor.run {
+                            appState.updateState(to: .transcribing)
+                        }
+                        
+                        try await transcriptionService.transcribe(
+                            audioData: audioData,
+                            apiKey: appState.settings.apiKey,
+                            model: appState.settings.selectedModel.rawValue
+                        )
+                    } catch {
+                        await MainActor.run {
+                            appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
+                        }
+                    }
+                }
+            }
         }
         
         // Validate setup on startup
@@ -102,9 +142,6 @@ struct ContentView: View {
     }
     
     private func setupHotkey() {
-        NSLog("🔧 DEBUG: setupHotkey called - enabled: \(appState.settings.hotkeyEnabled)")
-        NSLog("🔧 DEBUG: Hotkey modifiers: \(appState.settings.hotkeyModifiers), key: \(appState.settings.hotkeyKey)")
-        
         if appState.settings.hotkeyEnabled {
             hotkeyService.registerHotkey(
                 modifiers: appState.settings.hotkeyModifiers,
@@ -114,105 +151,16 @@ struct ContentView: View {
             hotkeyService.unregisterHotkey()
         }
     }
-    
-    private func handleHotkeyPressed() {
-        NSLog("🔥 DEBUG: ==================== HOTKEY PRESSED ====================")
-        NSLog("🔥 DEBUG: Current state: \(appState.currentState)")
-        NSLog("🔥 DEBUG: Setting wasRecordingStartedByHotkey = true")
-        
-        // Set the flag to indicate this recording was started by hotkey
-        appState.wasRecordingStartedByHotkey = true
-        
-        NSLog("🔥 DEBUG: Flag set, current state: \(appState.currentState)")
-        
-        if appState.currentState == .idle {
-            NSLog("🔥 DEBUG: State is idle, starting recording...")
-            startRecording()
-        } else if appState.currentState == .recording {
-            NSLog("🔥 DEBUG: State is recording, stopping recording...")
-            stopRecording()
-        } else {
-            NSLog("🔥 DEBUG: State is \(appState.currentState), no action taken")
-        }
-        
-        NSLog("🔥 DEBUG: handleHotkeyPressed completed")
-    }
-    
-    private func startRecording() {
-        print("DEBUG: startRecording called")
-        print("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-        
-        appState.debugInfo = "Debug: Starting recording..."
-        guard appState.settings.isConfigured else {
-            appState.debugInfo = "Debug: Settings not configured"
-            appState.showSettings = true
-            return
-        }
-
-        Task {
-            do {
-                try await audioService.startRecording()
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Recording started successfully"
-                    print("DEBUG: Recording started successfully, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-                }
-            } catch {
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Recording failed: \(error)"
-                    appState.updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    private func stopRecording() {
-        print("DEBUG: stopRecording called")
-        print("DEBUG: wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-        
-        Task {
-            do {
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Stopping recording..."
-                    print("DEBUG: About to stop recording, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-                }
-                let audioData = try await audioService.stopRecording()
-                
-                await MainActor.run {
-                    appState.updateState(to: .transcribing)
-                    appState.debugInfo = "Debug: Got \(audioData.count) bytes, transcribing..."
-                    print("DEBUG: Got audio data, starting transcription, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-                }
-                
-                // Transcribe the audio
-                try await transcriptionService.transcribe(
-                    audioData: audioData,
-                    apiKey: appState.settings.apiKey,
-                    model: appState.settings.selectedModel.rawValue
-                )
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Transcription request sent, waiting for response..."
-                    print("DEBUG: Transcription request sent, wasRecordingStartedByHotkey = \(appState.wasRecordingStartedByHotkey)")
-                }
-                
-            } catch {
-                await MainActor.run {
-                    appState.debugInfo = "Debug: Recording/transcription failed: \(error)"
-                    appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
 }
 
 struct MainAppView: View {
     @ObservedObject var appState: AppStateModel
+    let isWindowVisible: Bool
     
     var body: some View {
         ZStack {
-            // Premium background with gradient and blur effects
             GeometryReader { geometry in
                 ZStack {
-                    // Base gradient background
                     LinearGradient(
                         gradient: Gradient(colors: [
                             Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
@@ -223,7 +171,6 @@ struct MainAppView: View {
                         endPoint: .bottomTrailing
                     )
                     
-                    // Overlay blur effect
                     Rectangle()
                         .fill(.ultraThinMaterial)
                         .opacity(0.8)
@@ -232,12 +179,9 @@ struct MainAppView: View {
             }
             
             VStack(spacing: 10) {
-                // Modern Header with Wolf Logo
                 ModernHeaderView(appState: appState)
                 
-                // Central Recording Interface
                 VStack(spacing: 6) {
-                    // Glass-style Recording Button
                     ModernRecordingButton(
                         state: appState.currentState,
                         isRecording: appState.currentState == .recording,
@@ -248,20 +192,15 @@ struct MainAppView: View {
                         }
                     )
                     
-                    // Status text with modern styling
                     Text(appState.statusText)
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
-                        .transition(.opacity.combined(with: .scale))
-                        .animation(.easeInOut(duration: 0.3), value: appState.statusText)
-                    
-                    // Accessibility permission button removed - no longer needed
+                        // .transition(.opacity.combined(with: .scale))
+                        // .animation(.easeInOut(duration: 0.3), value: appState.statusText)
                 }
                 
-                // Modern Transcription Panel
                 ModernTranscriptionPanel(text: appState.transcribedText)
                 
-                // Sleek Footer with Hotkey
                 ModernFooterView(appState: appState)
             }
             .padding(.top, 4)
@@ -270,8 +209,6 @@ struct MainAppView: View {
         }
         .frame(width: 380, height: 420)
     }
-    
-
 }
 
 struct ModernHeaderView: View {
@@ -279,7 +216,6 @@ struct ModernHeaderView: View {
     
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            // Modern Wolf Logo
             ZStack {
                 Circle()
                     .fill(.ultraThinMaterial)
@@ -292,7 +228,6 @@ struct ModernHeaderView: View {
                     .symbolRenderingMode(.hierarchical)
             }
             
-            // App Title with Modern Typography
             Text("WolfWhisper")
                 .font(.system(size: 19.6, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -304,24 +239,19 @@ struct ModernHeaderView: View {
     }
 }
 
-
-
-// Helper function to handle recording button tap
 @MainActor
 private func handleRecordingButtonTap(appState: AppStateModel) {
     switch appState.currentState {
     case .idle:
-        // Check if API key is configured
         guard appState.settings.isConfigured else {
             appState.showSettings = true
             return
         }
         
-        // Mark as NOT triggered by hotkey (button click)
         appState.wasTriggeredByHotkey = false
         appState.wasRecordingStartedByHotkey = false
+        appState.lastTranscriptionSuccessful = false
         
-        // Start recording
         Task {
             do {
                 try await AudioService.shared.startRecording()
@@ -333,7 +263,6 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
         }
         
     case .recording:
-        // Stop recording and transcribe
         Task {
             do {
                 let audioData = try await AudioService.shared.stopRecording()
@@ -342,7 +271,6 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
                     appState.updateState(to: .transcribing)
                 }
                 
-                // Transcribe the audio
                 try await TranscriptionService.shared.transcribe(
                     audioData: audioData,
                     apiKey: appState.settings.apiKey,
@@ -357,12 +285,9 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
         }
         
     case .transcribing:
-        // Do nothing while transcribing
         break
     }
 }
-
-
 
 struct ModernRecordingButton: View {
     let state: AppState
@@ -370,37 +295,10 @@ struct ModernRecordingButton: View {
     let audioLevels: [Float]
     @ObservedObject var appState: AppStateModel
     let action: () -> Void
-    
-    @State private var isPressed = false
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var glowOpacity: Double = 0.0
-    
+
     var body: some View {
         ZStack {
-            // Outer glow ring for recording state
-            if isRecording {
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.red.opacity(0.8),
-                                Color.orange.opacity(0.6),
-                                Color.red.opacity(0.4)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
-                    .frame(width: 130, height: 130)
-                    .scaleEffect(pulseScale)
-                    .opacity(glowOpacity)
-                    .blur(radius: 2)
-            }
-            
-            // Main glassmorphic button
             ZStack {
-                // Glass background
                 Circle()
                     .fill(.ultraThinMaterial)
                     .frame(width: 100, height: 100)
@@ -410,8 +308,7 @@ struct ModernRecordingButton: View {
                     )
                     .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                     .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
-                
-                // Content based on state
+
                 Group {
                     switch state {
                     case .idle:
@@ -421,49 +318,16 @@ struct ModernRecordingButton: View {
                             ModernCompletedContent()
                         }
                     case .recording:
-                        ModernRecordingContent(audioLevels: audioLevels, appState: appState)
+                        ModernRecordingContent(audioLevels: audioLevels, appState: appState, isWindowVisible: true)
                     case .transcribing:
-                        ModernTranscribingContentNew()
+                        ModernTranscribingContentNew(appState: appState, isWindowVisible: true)
                     }
                 }
             }
         }
-        .scaleEffect(isPressed ? 0.95 : 1.0)
         .onTapGesture {
-            // Add haptic feedback
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             action()
-        }
-        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        })
-        .onAppear {
-            if isRecording {
-                startRecordingAnimation()
-            }
-        }
-        .onChange(of: isRecording) { _, recording in
-            if recording {
-                startRecordingAnimation()
-            } else {
-                stopRecordingAnimation()
-            }
-        }
-    }
-    
-    private func startRecordingAnimation() {
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            pulseScale = 1.2
-            glowOpacity = 0.8
-        }
-    }
-    
-    private func stopRecordingAnimation() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            pulseScale = 1.0
-            glowOpacity = 0.0
         }
     }
 }
@@ -480,99 +344,43 @@ struct ModernIdleContent: View {
 struct ModernRecordingContent: View {
     let audioLevels: [Float]
     @ObservedObject var appState: AppStateModel
-    @State private var waveAnimation: Bool = false
-    
-    @ViewBuilder
-    private var miniVisualization: some View {
-        switch appState.currentState {
-        case .recording:
-            MiniWaveVisualizer(audioLevels: audioLevels)
-        case .transcribing:
-            MiniTranscribingVisualizer()
-        case .idle:
-            if appState.transcribedText.isEmpty {
-                MiniWaveVisualizer(audioLevels: audioLevels)
-            } else {
-                MiniClipboardVisualizer()
-            }
-        }
-    }
-    
+    let isWindowVisible: Bool
     var body: some View {
         ZStack {
-            // Background circle
             Circle()
                 .fill(Color.white.opacity(0.1))
                 .frame(width: 70, height: 70)
-            
-                                // Mini visualization based on current state
-                    miniVisualization
-                .frame(width: 60, height: 24)
-        }
-        .onAppear {
-            waveAnimation = true
+            if appState.currentState == .recording && isWindowVisible {
+                MiniWaveVisualizer(audioLevels: audioLevels, isActive: true)
+            } else {
+                MiniWaveVisualizer(audioLevels: audioLevels, isActive: false)
+            }
         }
     }
 }
-
-
 
 struct ModernTranscribingContentNew: View {
+    @ObservedObject var appState: AppStateModel
+    let isWindowVisible: Bool
     var body: some View {
-        ZStack {
-            // Background circle
-            Circle()
-                .fill(Color.white.opacity(0.1))
-                .frame(width: 70, height: 70)
-            
-            // Beautiful rolling rainbow waveform 
-            MiniTranscribingVisualizer()
-                .frame(width: 60, height: 24)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 70, height: 70)
+                MiniTranscribingVisualizer(isActive: appState.currentState == .transcribing && isWindowVisible)
+            }
+            Text("Transcribing... The result will be copied to your clipboard.")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
         }
     }
 }
-
-struct ModernCompletedContent: View {
-    @State private var showMicrophoneIcon = false
-    
-    var body: some View {
-        ZStack {
-            // Background circle
-            Circle()
-                .fill(Color.white.opacity(0.1))
-                .frame(width: 70, height: 70)
-            
-            // Show either clipboard animation or default microphone icon
-            if showMicrophoneIcon {
-                // Default microphone icon
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 33.6, weight: .medium))
-                    .foregroundStyle(.white)
-                    .symbolRenderingMode(.hierarchical)
-                    .transition(.opacity.combined(with: .scale))
-            } else {
-                // Beautiful clipboard animation
-                MiniClipboardVisualizer()
-                    .scaleEffect(2.5) // Scale up for main window visibility
-            }
-        }
-        .onAppear {
-            // After clipboard animation completes, show microphone icon
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    showMicrophoneIcon = true
-                }
-            }
-        }
-    }
-}
-
-
 
 struct ModernTranscriptionPanel: View {
     let text: String
-    @State private var animateText = false
-    
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
             .fill(.thinMaterial)
@@ -585,20 +393,16 @@ struct ModernTranscriptionPanel: View {
             .overlay(
                 Group {
                     if text.isEmpty {
-                        // Empty state with elegant placeholder
                         VStack(spacing: 16) {
                             Image(systemName: "quote.bubble")
                                 .font(.system(size: 32, weight: .light))
                                 .foregroundStyle(.secondary)
                                 .symbolRenderingMode(.hierarchical)
-                            
                             Text("No transcription yet")
                                 .font(.system(size: 12.6, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
-                        .transition(.opacity.combined(with: .scale))
                     } else {
-                        // Transcribed text with typing animation
                         ScrollView {
                             Text(text)
                                 .font(.system(size: 12.6, weight: .regular, design: .rounded))
@@ -606,14 +410,11 @@ struct ModernTranscriptionPanel: View {
                                 .lineSpacing(4)
                                 .padding(20)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
-                        .animation(.easeInOut(duration: 0.5), value: text)
                     }
                 }
             )
             .frame(height: 150)
-            .animation(.easeInOut(duration: 0.3), value: text.isEmpty)
     }
 }
 
@@ -623,14 +424,12 @@ struct ModernFooterView: View {
     var body: some View {
         if appState.settings.hotkeyEnabled {
             HStack(spacing: 12) {
-                // Hotkey label with icon
                 Label("Global Hotkey:", systemImage: "keyboard")
                     .font(.system(size: 12.6, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                 
-                // Modern hotkey display
                 Text(formatHotkeyDisplay(appState.settings.hotkeyDisplay))
-                    .font(.system(size: 12.6, weight: .semibold, design: .monospaced)) // match label size
+                    .font(.system(size: 12.6, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -649,12 +448,11 @@ struct ModernFooterView: View {
                     .stroke(.white.opacity(0.2), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
-            .transition(.opacity.combined(with: .scale))
+            // .transition(.opacity.combined(with: .scale))
         }
     }
     
     private func formatHotkeyDisplay(_ display: String) -> String {
-        // Convert the display to use proper symbols
         return display
             .replacingOccurrences(of: "Cmd", with: "⌘")
             .replacingOccurrences(of: "Shift", with: "⇧")
@@ -664,32 +462,75 @@ struct ModernFooterView: View {
     }
 }
 
-// MARK: - Mini Wave Visualizer for Main Window
+struct ModernCompletedContent: View {
+    @State private var showMicrophoneIcon = false
+    @State private var animationTask: DispatchWorkItem?
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 70, height: 70)
+            if showMicrophoneIcon {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 33.6, weight: .medium))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.hierarchical)
+                    .transition(.opacity.combined(with: .scale))
+            } else {
+                MiniClipboardVisualizer()
+                    .scaleEffect(2.5)
+            }
+        }
+        .onAppear(perform: setupAnimations)
+        .onDisappear(perform: cancelAnimations)
+    }
+    private func setupAnimations() {
+        showMicrophoneIcon = false
+        let task = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                self.showMicrophoneIcon = true
+            }
+        }
+        self.animationTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: task)
+    }
+    private func cancelAnimations() {
+        animationTask?.cancel()
+    }
+}
+
 struct MiniWaveVisualizer: View {
     let audioLevels: [Float]
-    
+    let isActive: Bool
     private let barCount = 16
     private let barSpacing: CGFloat = 1.5
-    
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let currentTime = timeline.date.timeIntervalSinceReferenceDate
-            
+        if isActive {
+            TimelineView(.animation) { timeline in
+                let currentTime = timeline.date.timeIntervalSinceReferenceDate
+                HStack(spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        MiniWaveformBar(
+                            index: index,
+                            barCount: barCount,
+                            audioLevels: audioLevels,
+                            time: currentTime
+                        )
+                    }
+                }
+            }
+        } else {
             HStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    MiniWaveformBar(
-                        index: index,
-                        barCount: barCount,
-                        audioLevels: audioLevels,
-                        time: currentTime
-                    )
+                ForEach(0..<barCount, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 2, height: 2)
                 }
             }
         }
     }
 }
 
-// MARK: - Mini Waveform Bar
 struct MiniWaveformBar: View {
     let index: Int
     let barCount: Int
@@ -701,7 +542,6 @@ struct MiniWaveformBar: View {
     }
     
     private var audioLevel: Float {
-        // Map bar index to audio frequency band
         let audioIndex = Int(Float(index) / Float(barCount) * Float(audioLevels.count))
         if audioIndex < audioLevels.count {
             return audioLevels[audioIndex]
@@ -717,16 +557,13 @@ struct MiniWaveformBar: View {
     }
     
     private var rainbowColor: Color {
-        // Create rainbow gradient from purple to red based on bar position
         let normalizedPosition = Double(index) / Double(barCount - 1)
-        
-        // Rainbow progression: Purple -> Blue -> Cyan -> Green -> Yellow -> Orange -> Red
-        let hue = 0.8 - (normalizedPosition * 0.8) // 0.8 (purple) to 0.0 (red)
+        let hue = 0.8 - (normalizedPosition * 0.8)
         
         return Color(
             hue: hue,
-            saturation: 0.8 + Double(audioLevel) * 0.2, // More saturated with audio
-            brightness: 0.7 + Double(audioLevel) * 0.3  // Brighter with audio
+            saturation: 0.8 + Double(audioLevel) * 0.2,
+            brightness: 0.7 + Double(audioLevel) * 0.3
         )
     }
     
@@ -748,7 +585,7 @@ struct MiniWaveformBar: View {
                 )
                 .frame(width: barWidth, height: animatedHeight)
                 .shadow(color: rainbowColor.opacity(0.3), radius: 1, x: 0, y: 0.5)
-                .animation(.easeOut(duration: 0.05), value: Double(audioLevel))
+                // .animation(.easeOut(duration: 0.05), value: Double(audioLevel))
             
             Spacer()
         }
@@ -756,29 +593,36 @@ struct MiniWaveformBar: View {
     }
 }
 
-// MARK: - Mini Transcribing Visualizer
 struct MiniTranscribingVisualizer: View {
+    let isActive: Bool
     private let barCount = 16
     private let barSpacing: CGFloat = 1.5
-    
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let currentTime = timeline.date.timeIntervalSinceReferenceDate
-            
+        if isActive {
+            TimelineView(.animation) { timeline in
+                let currentTime = timeline.date.timeIntervalSinceReferenceDate
+                HStack(spacing: barSpacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        MiniTranscribingBar(
+                            index: index,
+                            barCount: barCount,
+                            time: currentTime
+                        )
+                    }
+                }
+            }
+        } else {
             HStack(spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    MiniTranscribingBar(
-                        index: index,
-                        barCount: barCount,
-                        time: currentTime
-                    )
+                ForEach(0..<barCount, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 2, height: 2)
                 }
             }
         }
     }
 }
 
-// MARK: - Mini Transcribing Bar
 struct MiniTranscribingBar: View {
     let index: Int
     let barCount: Int
@@ -792,7 +636,6 @@ struct MiniTranscribingBar: View {
         let maxHeight: CGFloat = 24
         let minHeight: CGFloat = 0.5
         
-        // Create rolling wave pattern with more dramatic variation
         let waveOffset = time * 2
         let indexOffset = Double(index) * 0.4
         
@@ -800,18 +643,14 @@ struct MiniTranscribingBar: View {
         let secondaryWave = Darwin.sin(waveOffset * 1.5 + indexOffset * 0.7) * 0.4
         
         let combinedWave = primaryWave + secondaryWave
-        let normalizedHeight = (combinedWave + 1) / 2 // Normalize to 0-1
+        let normalizedHeight = (combinedWave + 1) / 2
         
-        // Map to height range with more dramatic variation
         let heightRange = maxHeight - minHeight
         return minHeight + (normalizedHeight * heightRange)
     }
     
     private var rainbowColor: Color {
-        // Create rainbow gradient from purple to red based on bar position
         let normalizedPosition = Double(index) / Double(barCount - 1)
-        
-        // Rainbow progression with rolling animation
         let timeOffset = time * 0.5
         let hue = fmod(0.8 - (normalizedPosition * 0.8) + timeOffset, 1.0)
         
@@ -847,15 +686,14 @@ struct MiniTranscribingBar: View {
     }
 }
 
-// MARK: - Mini Clipboard Visualizer
 struct MiniClipboardVisualizer: View {
     @State private var showCompleted = false
     @State private var pulseScale: CGFloat = 1.0
-    
+    @State private var animationTask: DispatchWorkItem?
+
     var body: some View {
         ZStack {
             if showCompleted {
-                // Completed state with checkmark
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(
@@ -871,9 +709,7 @@ struct MiniClipboardVisualizer: View {
                     .scaleEffect(pulseScale)
                     .shadow(color: Color.blue.opacity(0.2), radius: 2, x: 0, y: 1)
             } else {
-                // Initial clipboard animation
                 ZStack {
-                    // Background glow
                     Circle()
                         .fill(
                             RadialGradient(
@@ -890,7 +726,6 @@ struct MiniClipboardVisualizer: View {
                         .frame(width: 24, height: 24)
                         .scaleEffect(pulseScale)
                     
-                    // Clipboard icon
                     Image(systemName: "clipboard")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.blue)
@@ -898,29 +733,26 @@ struct MiniClipboardVisualizer: View {
                 }
             }
         }
-        .onAppear {
-            startAnimation()
-        }
+        .onAppear(perform: startAnimation)
+        .onDisappear(perform: cancelAnimation)
     }
     
     private func startAnimation() {
-        // Phase 1: Initial clipboard animation
         withAnimation(.easeInOut(duration: 0.4)) {
             pulseScale = 1.2
         }
-        
-        // Phase 2: Transition to completed state
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        let task = DispatchWorkItem {
             withAnimation(.easeInOut(duration: 0.3)) {
-                showCompleted = true
-                pulseScale = 1.0
-            }
-            
-            // Subtle pulse for completed state
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulseScale = 1.05
+                self.showCompleted = true
+                self.pulseScale = 1.0
             }
         }
+        self.animationTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: task)
+    }
+    
+    private func cancelAnimation() {
+        animationTask?.cancel()
     }
 }
 

@@ -222,6 +222,9 @@ struct FloatingRecordingView: View {
                 // Entrance animation
             }
         }
+        .onDisappear {
+            // No animation state variables in scope for this view
+        }
     }
     
     private var statusText: String {
@@ -305,24 +308,38 @@ struct FloatingRecordingView: View {
     }
     
     private func handleStateChange(_ newState: AppState) {
-        if newState == .idle && clipboardState == .none {
-            // Transcription just completed, show clipboard state
-            if appState.wasRecordingStartedByHotkey {
-                clipboardState = .copyingToClipboardAndPasting
-            } else {
-                clipboardState = .copyingToClipboard
-            }
+        switch newState {
+        case .recording, .transcribing:
+            // CRITICAL FIX: Reset the local state when a new cycle begins.
+            // This removes the old ClipboardAnimationView.
+            clipboardState = .none
+            shouldFadeOut = false
             
-            // After a delay, fade out
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    shouldFadeOut = true
-                }
-                
-                // Close the window after fade animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    // This should be handled by the parent view
-                    NotificationCenter.default.post(name: NSNotification.Name("CloseFloatingWindow"), object: nil)
+        case .idle:
+            // This logic is already correct.
+            if clipboardState == .none {
+                if appState.lastTranscriptionSuccessful {
+                    // Show clipboard animation on success
+                    if appState.wasRecordingStartedByHotkey {
+                        clipboardState = .copyingToClipboardAndPasting
+                    } else {
+                        clipboardState = .copyingToClipboard
+                    }
+                    
+                    // After a delay, fade out and close
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            shouldFadeOut = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            NotificationCenter.default.post(name: NSNotification.Name("CloseFloatingWindow"), object: nil)
+                        }
+                    }
+                } else {
+                    // On failure, close immediately
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        NotificationCenter.default.post(name: NSNotification.Name("CloseFloatingWindow"), object: nil)
+                    }
                 }
             }
         }
@@ -415,6 +432,12 @@ struct TranscribingWaveVisualizer: View {
             }
             .frame(width: visualizerWidth, height: visualizerHeight)
         }
+        .onAppear {
+            // No setup needed
+        }
+        .onDisappear {
+            // No cleanup needed
+        }
     }
 }
 
@@ -492,6 +515,7 @@ struct ClipboardAnimationView: View {
     @State private var checkmarkOpacity: Double = 0.0
     @State private var sparkleAngles: [Double] = []
     @State private var sparkleScales: [CGFloat] = []
+    @State private var isAnimating = false
     
     var body: some View {
         ZStack {
@@ -512,6 +536,7 @@ struct ClipboardAnimationView: View {
                 .scaleEffect(pulseScale)
                 .opacity(glowOpacity)
                 .blur(radius: 2)
+                .animation(isAnimating ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: pulseScale)
             
             // Main clipboard icon
             ZStack {
@@ -564,7 +589,15 @@ struct ClipboardAnimationView: View {
             }
         }
         .onAppear {
+            isAnimating = true
             startClipboardAnimation()
+        }
+        .onDisappear {
+            isAnimating = false
+            pulseScale = 1.0
+            glowOpacity = 0.0
+            checkmarkScale = 0.0
+            checkmarkOpacity = 0.0
         }
     }
     
@@ -573,11 +606,9 @@ struct ClipboardAnimationView: View {
         sparkleAngles = (0..<8).map { Double($0) * .pi / 4 }
         sparkleScales = Array(repeating: 0.0, count: 8)
         
-        // Pulse animation
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            pulseScale = 1.2
-            glowOpacity = 0.6
-        }
+        // Set target values for pulse animation (the .animation modifier will handle the repeat)
+        pulseScale = 1.2
+        glowOpacity = 0.6
         
         // Delayed checkmark appearance
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -759,9 +790,11 @@ struct CompletedStateView: View {
 
 // MARK: - Processing Indicator
 struct ProcessingIndicator: View {
-    @State private var rotationAngle: Double = 0
     @State private var pulseScale: CGFloat = 1.0
-    @State private var nodeOpacity: Double = 0.5
+    @State private var glowOpacity: Double = 0.0
+    @State private var rotationAngle: Double = 0.0
+    @State private var nodeOpacity: Double = 0.0
+    @State private var isAnimating = false
     
     var body: some View {
         ZStack {
@@ -777,6 +810,7 @@ struct ProcessingIndicator: View {
                 )
                 .frame(width: 100, height: 100)
                 .rotationEffect(.degrees(rotationAngle))
+                .animation(isAnimating ? .linear(duration: 4).repeatForever(autoreverses: false) : .default, value: rotationAngle)
             
             // Middle ring
             Circle()
@@ -808,6 +842,7 @@ struct ProcessingIndicator: View {
                     )
                     .rotationEffect(.degrees(rotationAngle * 0.5))
                     .opacity(nodeOpacity)
+                    .animation(isAnimating ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default, value: nodeOpacity)
             }
             
             // Central brain
@@ -816,6 +851,7 @@ struct ProcessingIndicator: View {
                     .fill(Color.white)
                     .frame(width: 40, height: 32)
                     .scaleEffect(pulseScale)
+                    .animation(isAnimating ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: pulseScale)
                 
                 Image(systemName: "brain")
                     .font(.system(size: 24, weight: .medium))
@@ -826,26 +862,27 @@ struct ProcessingIndicator: View {
         .onAppear {
             startProcessingAnimations()
         }
+        .onDisappear {
+            isAnimating = false
+            pulseScale = 1.0
+            glowOpacity = 0.0
+            rotationAngle = 0.0
+            nodeOpacity = 0.0
+        }
     }
     
     private func startProcessingAnimations() {
-        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
-            rotationAngle = 360
-        }
-        
-        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.15
-        }
-        
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            nodeOpacity = 1.0
-        }
+        isAnimating = true
+        rotationAngle = 360
+        pulseScale = 1.15
+        nodeOpacity = 1.0
     }
 }
 
 // MARK: - Animated Ellipsis
 struct AnimatedEllipsis: View {
     @State private var animationPhase: Double = 0
+    @State private var isAnimating = false
     
     var body: some View {
         HStack(spacing: 2) {
@@ -855,15 +892,20 @@ struct AnimatedEllipsis: View {
                     .foregroundStyle(.primary)
                     .opacity(dotOpacity(for: index))
                     .animation(
-                        .easeInOut(duration: 0.6)
+                        isAnimating ? .easeInOut(duration: 0.6)
                         .repeatForever(autoreverses: false)
-                        .delay(Double(index) * 0.2),
+                        .delay(Double(index) * 0.2) : .default,
                         value: animationPhase
                     )
             }
         }
         .onAppear {
+            isAnimating = true
             animationPhase = 1
+        }
+        .onDisappear {
+            isAnimating = false
+            animationPhase = 0
         }
     }
     

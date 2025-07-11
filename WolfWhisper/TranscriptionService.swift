@@ -10,21 +10,16 @@ class TranscriptionService: ObservableObject {
     private init() {}
     
     func transcribe(audioData: Data, apiKey: String, model: String) async throws {
-        print("Starting transcription with \(audioData.count) bytes of audio data")
-        
         guard !apiKey.isEmpty else {
             let error = TranscriptionError.invalidAPIKey
-            print("Transcription failed: Invalid API key")
             onTranscriptionComplete?(.failure(error))
             throw error
         }
         
         do {
             let transcribedText = try await performTranscription(audioData: audioData, apiKey: apiKey, model: model)
-            print("Transcription successful: \(transcribedText)")
             onTranscriptionComplete?(.success(transcribedText))
         } catch {
-            print("Transcription failed with error: \(error)")
             onTranscriptionComplete?(.failure(error))
             throw error
         }

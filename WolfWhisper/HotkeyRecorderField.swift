@@ -50,26 +50,22 @@ struct HotkeyRecorderField: View {
     }
     
     private func startRecording() {
-        print("🎯 Starting hotkey recording...")
         isRecording = true
         isFieldFocused = true
         
         // Monitor global events (when app is not focused)
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { event in
-            print("🌍 Global event: keyCode=\(event.keyCode), modifiers=\(event.modifierFlags)")
             handleNSEvent(event)
         }
         
         // Monitor local events (when app is focused)
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
-            print("🏠 Local event: keyCode=\(event.keyCode), modifiers=\(event.modifierFlags)")
             handleNSEvent(event)
             return nil // Consume the event
         }
     }
     
     private func stopRecording() {
-        print("🛑 Stopping hotkey recording...")
         isRecording = false
         isFieldFocused = false
         
@@ -88,21 +84,15 @@ struct HotkeyRecorderField: View {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let keyCode = event.keyCode
         
-        print("🔍 Processing NSEvent: keyCode=\(keyCode), modifiers=\(modifiers)")
-        
         // Only capture combinations with at least one modifier
         if !modifiers.isEmpty && keyCode != 0 {
             let modifierFlags = convertModifiersToUInt(modifiers)
             captureHotkey(modifiers: modifierFlags, keyCode: keyCode)
-        } else {
-            print("⚠️ Ignoring event - no modifiers or invalid keyCode")
         }
     }
     
     private func captureHotkey(modifiers: UInt, keyCode: UInt16) {
         let displayString = createDisplayString(modifiers: modifiers, keyCode: keyCode)
-        
-        print("✅ Captured hotkey: modifiers=\(modifiers), keyCode=\(keyCode), display=\(displayString)")
         
         DispatchQueue.main.async {
             self.hotkeyModifiers = modifiers

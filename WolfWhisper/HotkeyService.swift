@@ -23,15 +23,11 @@ class HotkeyService: ObservableObject {
     }
     
     func registerHotkey(modifiers: UInt, key: UInt16) {
-        NSLog("🔧 HotkeyService.registerHotkey called with modifiers: \(modifiers), key: \(key)")
-        
         // Unregister existing hotkey first
         unregisterHotkey()
         
         let keyCode = Int(key)
         let carbonModifiers = carbonModifiersFromFlags(modifiers)
-        
-        NSLog("🔧 Converted to keyCode: \(keyCode), carbonModifiers: \(carbonModifiers)")
         
         // Register the hotkey
         let hotKeyID = EventHotKeyID(signature: fourCharCodeFrom("WLFW"), id: 1)
@@ -48,9 +44,6 @@ class HotkeyService: ObservableObject {
         if status == noErr {
             isRegistered = true
             setupEventHandler()
-            NSLog("✅ Hotkey registered successfully with modifiers: \(modifiers), key: \(key)")
-        } else {
-            NSLog("❌ Failed to register hotkey: \(status) (modifiers: \(modifiers), key: \(key))")
         }
     }
     
@@ -74,24 +67,16 @@ class HotkeyService: ObservableObject {
     }
     
     private func setupEventHandler() {
-        NSLog("🔧 Setting up event handler...")
-        
         var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
         
         let callback: EventHandlerProcPtr = { (nextHandler, theEvent, userData) -> OSStatus in
-            NSLog("🔥 HOTKEY EVENT TRIGGERED!")
-            
             // Get the hotkey ID
             var hotKeyID = EventHotKeyID()
             let status = GetEventParameter(theEvent, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
             
             if status == noErr {
-                NSLog("🔥 Hotkey ID: \(hotKeyID.id)")
-                
                 // Call the callback on the main thread ASYNCHRONOUSLY
-                NSLog("🔥 Calling onHotkeyPressed callback")
                 DispatchQueue.main.async {
-                    NSLog("🔥 Executing onHotkeyPressed callback on main thread")
                     if let instance = Unmanaged<HotkeyService>.fromOpaque(userData!).takeUnretainedValue().onHotkeyPressed {
                         instance()
                     }
@@ -101,13 +86,7 @@ class HotkeyService: ObservableObject {
             return noErr
         }
         
-        let status = InstallEventHandler(GetEventDispatcherTarget(), callback, 1, &eventSpec, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
-        
-        if status == noErr {
-            NSLog("✅ Event handler installed successfully")
-        } else {
-            NSLog("❌ Failed to install event handler: \(status)")
-        }
+        _ = InstallEventHandler(GetEventDispatcherTarget(), callback, 1, &eventSpec, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
     }
     
     // Convert string representation to Carbon key codes
@@ -135,28 +114,22 @@ class HotkeyService: ObservableObject {
     
     // Convert UInt modifier flags to Carbon modifiers
     private func carbonModifiersFromFlags(_ flags: UInt) -> Int {
-        NSLog("🔧 Converting modifier flags: \(flags)")
         var carbonModifiers = 0
         
         // The flags come from our hotkey recorder which stores Carbon modifier flags
         if flags & UInt(cmdKey) != 0 {
             carbonModifiers |= cmdKey
-            NSLog("🔧 Added cmdKey")
         }
         if flags & UInt(optionKey) != 0 {
             carbonModifiers |= optionKey
-            NSLog("🔧 Added optionKey")
         }
         if flags & UInt(controlKey) != 0 {
             carbonModifiers |= controlKey
-            NSLog("🔧 Added controlKey")
         }
         if flags & UInt(shiftKey) != 0 {
             carbonModifiers |= shiftKey
-            NSLog("🔧 Added shiftKey")
         }
         
-        NSLog("🔧 Final carbonModifiers: \(carbonModifiers)")
         return carbonModifiers
     }
     
@@ -186,31 +159,24 @@ extension HotkeyService {
     }
     
     func pasteToActiveWindow() {
-        NSLog("🔥 pasteToActiveWindow called")
-        
         // Check and request accessibility permissions with proper prompting
         checkAndRequestAccessibilityPermissions { [weak self] granted in
             if granted {
                 self?.pasteTextUsingAccessibility()
             } else {
-                NSLog("🔥 Cannot paste: Accessibility permissions denied")
                 self?.showAccessibilityPermissionAlert()
             }
         }
     }
     
     private func checkAndRequestAccessibilityPermissions(completion: @escaping (Bool) -> Void) {
-        NSLog("🔥 Checking accessibility permissions")
-        
         // Use the proper API to check and request accessibility permissions
         let options: [CFString: Any] = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         let isTrusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
         if isTrusted {
-            NSLog("🔥 Accessibility permissions already granted")
             completion(true)
         } else {
-            NSLog("🔥 Accessibility permissions requested. Prompt shown.")
             // Add delay to allow prompt to register the app in the system
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.showAccessibilityPermissionAlert { granted in
@@ -221,8 +187,6 @@ extension HotkeyService {
     }
     
     private func showAccessibilityPermissionAlert(completion: @escaping (Bool) -> Void) {
-        NSLog("🔥 Showing accessibility permission alert")
-        
         let alert = NSAlert()
         alert.messageText = "Accessibility Permissions Required"
         alert.informativeText = "WolfWhisper needs Accessibility permissions to paste transcribed text into other applications. Please enable it in System Settings > Privacy & Security > Accessibility."
@@ -239,24 +203,18 @@ extension HotkeyService {
                 // Poll for permission grant after a delay (macOS doesn't notify automatically)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                     let isTrusted = AXIsProcessTrusted()
-                    NSLog("🔥 After opening System Settings, trusted: \(isTrusted)")
                     completion(isTrusted)
                 }
             } else {
-                NSLog("🔥 Failed to open System Settings")
                 completion(false)
             }
         } else {
-            NSLog("🔥 User cancelled accessibility permission request")
             completion(false)
         }
     }
     
     private func pasteTextUsingAccessibility() {
-        NSLog("🔥 pasteTextUsingAccessibility called")
-        
         guard let textToPaste = clipboardText else {
-            NSLog("🔥 No text to paste")
             return
         }
         
@@ -264,16 +222,12 @@ extension HotkeyService {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(textToPaste, forType: .string)
-        NSLog("🔥 Text copied to clipboard as fallback")
         
         // Get the frontmost application
         guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-            NSLog("🔥 No frontmost application found")
             showPasteErrorAlert(message: "Cannot paste: No active application found.")
             return
         }
-        
-        NSLog("🔥 Frontmost app: \(frontmostApp.localizedName ?? "Unknown")")
         
         // Create an Accessibility element for the app
         let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
@@ -284,7 +238,6 @@ extension HotkeyService {
                 if !tryPasteToAnyTextFieldInApp(appElement: appElement, text: textToPaste) {
                     // If all strategies fail, try simulating paste with key events as last resort
                     if !trySimulatePasteKeyEvent(text: textToPaste) {
-                        NSLog("🔥 All paste strategies failed")
                         showPasteErrorAlert(message: "Cannot paste: No accessible text field found.")
                     }
                 }
@@ -293,14 +246,11 @@ extension HotkeyService {
     }
     
     private func tryPasteToFocusedElement(appElement: AXUIElement, text: String) -> Bool {
-        NSLog("🔥 Trying to paste to focused element")
-        
         // Get the focused UI element
         var focusedElement: AnyObject?
         let focusError = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
         
         guard focusError == .success, let element = focusedElement else {
-            NSLog("🔥 No focused element found: \(focusError.rawValue)")
             return false
         }
         
@@ -309,14 +259,11 @@ extension HotkeyService {
     }
     
     private func tryPasteToFirstResponder(appElement: AXUIElement, text: String) -> Bool {
-        NSLog("🔥 Trying to paste to first responder")
-        
         // Try to get the main window first
         var mainWindow: AnyObject?
         let windowError = AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &mainWindow)
         
         guard windowError == .success, let window = mainWindow else {
-            NSLog("🔥 No main window found")
             return false
         }
         
@@ -327,7 +274,6 @@ extension HotkeyService {
         let focusInWindowError = AXUIElementCopyAttributeValue(axWindow, kAXFocusedUIElementAttribute as CFString, &focusedInWindow)
         
         guard focusInWindowError == .success, let element = focusedInWindow else {
-            NSLog("🔥 No focused element in main window")
             return false
         }
         
@@ -336,14 +282,11 @@ extension HotkeyService {
     }
     
     private func tryPasteToAnyTextFieldInApp(appElement: AXUIElement, text: String) -> Bool {
-        NSLog("🔥 Trying to find any text field in the app")
-        
         // Get all windows
         var windows: AnyObject?
         let windowsError = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
         
         guard windowsError == .success, let windowArray = windows as? [AXUIElement] else {
-            NSLog("🔥 Could not get windows")
             return false
         }
         
@@ -356,7 +299,6 @@ extension HotkeyService {
             }
         }
         
-        NSLog("🔥 No accessible text fields found in any window")
         return false
     }
     
@@ -389,36 +331,28 @@ extension HotkeyService {
     }
     
     private func trySetTextOnElement(_ element: AXUIElement, text: String, description: String) -> Bool {
-        NSLog("🔥 Trying to set text on \(description)")
-        
         // Check if the element supports the value attribute
         var isSettable = DarwinBoolean(false)
         let settableError = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable)
         
         if settableError != .success {
-            NSLog("🔥 Could not check if \(description) is settable: \(settableError.rawValue)")
             return false
         }
         
         if !isSettable.boolValue {
-            NSLog("🔥 \(description) is not settable")
             return false
         }
         
         // Try to set the text value
         let setError = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFTypeRef)
         if setError != .success {
-            NSLog("🔥 Failed to set text on \(description): \(setError.rawValue)")
             return false
         }
         
-        NSLog("🔥 Successfully pasted text to \(description)")
         return true
     }
     
     private func trySimulatePasteKeyEvent(text: String) -> Bool {
-        NSLog("🔥 Trying to simulate paste key event as last resort")
-        
         // This is a fallback - simulate Cmd+V after putting text in clipboard
         // Note: This might not work in sandboxed apps, but worth trying
         
@@ -431,7 +365,6 @@ extension HotkeyService {
         keyDownEvent?.post(tap: .cghidEventTap)
         keyUpEvent?.post(tap: .cghidEventTap)
         
-        NSLog("🔥 Simulated Cmd+V key event")
         return true
     }
     
