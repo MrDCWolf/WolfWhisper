@@ -218,33 +218,40 @@ extension HotkeyService {
             return
         }
         
-        // Update clipboard as a fallback
+        // Update clipboard
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(textToPaste, forType: .string)
         
-        // Get the frontmost application
-        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-            showPasteErrorAlert(message: "Cannot paste: No active application found.")
+        // For web browsers, use the simple keyboard simulation approach
+        if isWebBrowser() {
+            // Give a small delay to ensure clipboard is updated
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.simulatePasteKeyboardShortcut()
+            }
             return
         }
         
-        // Create an Accessibility element for the app
+        // For non-web browsers, try accessibility approach first, then fallback to keyboard simulation
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
+            simulatePasteKeyboardShortcut()
+            return
+        }
+        
         let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
         
-        // Try multiple strategies to find a text input field
+        // Try accessibility methods for native apps
         if !tryPasteToFocusedElement(appElement: appElement, text: textToPaste) {
             if !tryPasteToFirstResponder(appElement: appElement, text: textToPaste) {
                 if !tryPasteToAnyTextFieldInApp(appElement: appElement, text: textToPaste) {
-                    // If all strategies fail, try simulating paste with key events as last resort
-                    if !trySimulatePasteKeyEvent(text: textToPaste) {
-                        showPasteErrorAlert(message: "Cannot paste: No accessible text field found.")
-                    }
+                    // Fallback to keyboard simulation
+                    simulatePasteKeyboardShortcut()
                 }
             }
         }
     }
     
+    // Simplified tryPasteToFocusedElement - remove web browser specific logic
     private func tryPasteToFocusedElement(appElement: AXUIElement, text: String) -> Bool {
         // Get the focused UI element
         var focusedElement: AnyObject?
@@ -302,6 +309,33 @@ extension HotkeyService {
         return false
     }
     
+
+    
+    // Remove the complex web browser detection and simplify
+    private func isWebBrowser() -> Bool {
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
+            return false
+        }
+        
+        let browserBundleIds = [
+            "com.google.Chrome",
+            "com.google.Chrome.canary",
+            "com.apple.Safari",
+            "org.mozilla.firefox",
+            "com.microsoft.edgemac",
+            "com.operasoftware.Opera",
+            "com.brave.Browser",
+            "com.vivaldi.Vivaldi",
+            "org.chromium.Chromium"
+        ]
+        
+        return browserBundleIds.contains(frontmostApp.bundleIdentifier ?? "")
+    }
+    
+
+    
+
+
     private func findTextFieldInElement(_ element: AXUIElement) -> AXUIElement? {
         // Check if this element itself is a text field
         var role: AnyObject?
@@ -330,42 +364,48 @@ extension HotkeyService {
         return nil
     }
     
+    // Simplified trySetTextOnElement
     private func trySetTextOnElement(_ element: AXUIElement, text: String, description: String) -> Bool {
         // Check if the element supports the value attribute
         var isSettable = DarwinBoolean(false)
         let settableError = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable)
         
-        if settableError != .success {
+        guard settableError == .success && isSettable.boolValue else {
             return false
         }
         
-        if !isSettable.boolValue {
-            return false
-        }
+        // Try to set focus first
+        let _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        
+        // Small delay
+        usleep(25000) // 25ms
         
         // Try to set the text value
         let setError = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFTypeRef)
-        if setError != .success {
-            return false
-        }
         
-        return true
+        return setError == .success
     }
     
-    private func trySimulatePasteKeyEvent(text: String) -> Bool {
-        // This is a fallback - simulate Cmd+V after putting text in clipboard
-        // Note: This might not work in sandboxed apps, but worth trying
+    // Simplified and more reliable keyboard paste simulation
+    private func simulatePasteKeyboardShortcut() {
+        // Create CGEvents for Cmd+V
+        guard let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: true),
+              let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: false) else {
+            showPasteErrorAlert(message: "Failed to create keyboard events.")
+            return
+        }
         
-        let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: true) // V key
-        let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: false)
+        // Set Command modifier
+        keyDownEvent.flags = .maskCommand
+        keyUpEvent.flags = .maskCommand
         
-        keyDownEvent?.flags = .maskCommand
-        keyUpEvent?.flags = .maskCommand
+        // Post the events with proper timing
+        keyDownEvent.post(tap: .cghidEventTap)
         
-        keyDownEvent?.post(tap: .cghidEventTap)
-        keyUpEvent?.post(tap: .cghidEventTap)
+        // Small delay between key down and key up (more realistic)
+        usleep(10000) // 10ms
         
-        return true
+        keyUpEvent.post(tap: .cghidEventTap)
     }
     
     private func showAccessibilityPermissionAlert() {
