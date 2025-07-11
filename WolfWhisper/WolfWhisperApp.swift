@@ -36,6 +36,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyService.shared.unregisterHotkey()
         return false // Do NOT quit the app when the last window closes
     }
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Ensure the app doesn't quit when all windows are closed
+        NSApp.setActivationPolicy(.accessory)
+    }
+    
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // When the app is reopened (e.g., from Dock), show the main window
+        if !flag {
+            // Find and show the main window
+            if let mainWindow = NSApp.windows.first(where: { $0.identifier?.rawValue != "settings" }) {
+                mainWindow.makeKeyAndOrderFront(nil)
+            }
+        }
+        return true
+    }
 }
 
 @main
@@ -66,6 +82,7 @@ struct WolfWhisperApp: App {
         .onChange(of: appState.settings.launchAtLogin) { _, newValue in
             handleLaunchAtLoginChange(newValue)
         }
+
         
         // Settings window as a separate scene
         WindowGroup("Settings", id: "settings") {
@@ -76,7 +93,7 @@ struct WolfWhisperApp: App {
         .defaultPosition(.center)
         .handlesExternalEvents(matching: Set(arrayLiteral: "settings"))
         
-        // Menu Bar Extra - Using isolated content view to prevent constant updates
+        // Menu Bar Extra - Always present to keep app alive
         MenuBarExtra("WolfWhisper", systemImage: "pawprint.circle.fill") {
             MenuBarContentView(
                 currentState: appState.currentState,
@@ -109,7 +126,24 @@ struct WolfWhisperApp: App {
                 },
                 onOpenSettings: {
                     NSApp.activate(ignoringOtherApps: true)
-                    appState.showSettings = true
+                    // Find existing settings window or create new one
+                    if let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
+                        settingsWindow.makeKeyAndOrderFront(nil)
+                    } else {
+                        // Fallback: create a new settings window
+                        let settingsView = SettingsView(appState: appState)
+                        let hostingController = NSHostingController(rootView: settingsView)
+                        let settingsWindow = NSWindow(
+                            contentRect: NSRect(x: 0, y: 0, width: 490, height: 350),
+                            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                            backing: .buffered,
+                            defer: false
+                        )
+                        settingsWindow.title = "Settings"
+                        settingsWindow.contentViewController = hostingController
+                        settingsWindow.center()
+                        settingsWindow.makeKeyAndOrderFront(nil)
+                    }
                 },
                 onQuit: {
                     NSApplication.shared.terminate(nil)
@@ -397,16 +431,22 @@ struct MenuBarContentView: View {
             .frame(width: 240)
             .padding(6)
         } else {
-            VStack {
-                Text("Menu bar disabled")
+            // Even when menu bar is disabled, show minimal interface to keep app alive
+            VStack(spacing: 8) {
+                Text("WolfWhisper")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Button("Enable in Settings") {
+                Button("Settings") {
                     onOpenSettings()
                 }
+                .buttonStyle(PlainButtonStyle())
+                Button("Quit") {
+                    onQuit()
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             .padding(8)
-            .frame(width: 150)
+            .frame(width: 120)
         }
     }
 }

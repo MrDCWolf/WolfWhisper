@@ -1,0 +1,148 @@
+diff --git a/WolfWhisper/AppState.swift b/WolfWhisper/AppState.swift
+index 41c3c01..29412de 100644
+--- a/WolfWhisper/AppState.swift
++++ b/WolfWhisper/AppState.swift
+@@ -133,11 +133,15 @@ class SettingsModel: ObservableObject {
+         savePanel.allowedContentTypes = [.plainText]
+         
+         savePanel.begin { response in
+-            if response == .OK, let url = savePanel.url {
+-                do {
+-                    try debugInfo.write(to: url, atomically: true, encoding: .utf8)
+-                } catch {
+-                    print("Failed to export debug log: \(error)")
++            if response == .OK {
++                Task { @MainActor in
++                    if let url = savePanel.url {
++                        do {
++                            try debugInfo.write(to: url, atomically: true, encoding: .utf8)
++                        } catch {
++                            print("Failed to export debug log: \(error)")
++                        }
++                    }
+                 }
+             }
+         }
+@@ -148,7 +152,7 @@ class SettingsModel: ObservableObject {
+         
+         info.append("WolfWhisper Debug Log")
+         info.append("Generated: \(Date())")
+-        info.append("Version: 1.4.0")
++        info.append("Version: 1.1")
+         info.append("")
+         
+         info.append("=== Settings ===")
+@@ -245,12 +249,19 @@ class AppStateModel: ObservableObject {
+     @Published var transcribedText: String = ""
+     @Published var audioLevels: [Float] = []
+     @Published var wasTriggeredByHotkey: Bool = false
++    @Published var wasRecordingStartedByHotkey: Bool = false
+     @Published var needsSetup: Bool = false
+     @Published var debugInfo: String = "Debug: No transcription yet"
++    @Published var lastTranscriptionSuccessful: Bool = false
+     
+     // Settings
+     @Published var settings = SettingsModel()
+     
++    #if DEBUG
++    private var cpuTimer: Timer?
++    private(set) var isCPUMonitoringActive: Bool = false
++    #endif
++    
+     init() {
+         checkFirstLaunch()
+     }
+@@ -271,6 +282,12 @@ class AppStateModel: ObservableObject {
+     }
+     
+     func updateState(to newState: AppState, message: String? = nil) {
++        // CRITICAL FIX: If we are transitioning TO the idle state,
++        // ensure all audio resources are forcefully cleaned up.
++        if newState == .idle && currentState != .idle {
++            AudioService.shared.forceCleanup()
++        }
++        
+         currentState = newState
+         
+         if let message = message {
+@@ -317,10 +334,8 @@ class AppStateModel: ObservableObject {
+             missingRequirements.append("Microphone Access")
+         }
+         
+-        // 3. Check accessibility permissions (for hotkeys)
+-        if settings.hotkeyEnabled && !hasAccessibilityPermissions() {
+-            missingRequirements.append("Accessibility Access")
+-        }
++        // 3. Accessibility permissions are handled on-demand in HotkeyService
++        // No need to validate upfront - user will be prompted when they try to paste
+         
+         if !missingRequirements.isEmpty {
+             needsSetup = true
+@@ -343,9 +358,41 @@ class AppStateModel: ObservableObject {
+     }
+     
+     func startRecording() async {
+-        // This will be called from menu bar - delegate to audio service
+-        updateState(to: .recording)
+-        // The actual recording logic should be handled by ContentView or AudioService
++        // This will be called from menu bar or main window
++        // DO NOT modify wasRecordingStartedByHotkey here - it should be set by the caller
++        guard settings.isConfigured else {
++            await MainActor.run {
++                debugInfo = "Debug: Settings not configured"
++                showSettings = true
++            }
++            return
++        }
++        await MainActor.run {
++            // Reset transcription success flag at the start of each recording
++            lastTranscriptionSuccessful = false
++            updateState(to: .recording)
++            debugInfo = "Debug: Starting recording..."
++        }
++        do {
++            try await AudioService.shared.startRecording()
++            await MainActor.run {
++                debugInfo = "Debug: Recording started successfully"
++            }
++        } catch {
++            await MainActor.run {
++                debugInfo = "Debug: Recording failed: \(error)"
++                updateState(to: .idle, message: "Recording failed: \(error.localizedDescription)")
++            }
++        }
++    }
++    
++    func startRecordingFromMenuBar() async {
++        // Explicitly mark as NOT started by hotkey
++        await MainActor.run {
++            wasRecordingStartedByHotkey = false
++            wasTriggeredByHotkey = false
++        }
++        await startRecording()
+     }
+     
+     func requestAccessibilityPermission() {
+@@ -353,4 +400,21 @@ class AppStateModel: ObservableObject {
+         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+         NSWorkspace.shared.open(url)
+     }
++    
++    #if DEBUG
++    func startCPUMonitoring() {
++        guard !isCPUMonitoringActive else { return }
++        isCPUMonitoringActive = true
++        cpuTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
++            guard let self = self else { return }
++            let info = ProcessInfo.processInfo
++            print("CPU Usage Debug - Active Threads: \(Thread.callStackSymbols.count), State: \(self.currentState)")
++        }
++    }
++    func stopCPUMonitoring() {
++        cpuTimer?.invalidate()
++        cpuTimer = nil
++        isCPUMonitoringActive = false
++    }
++    #endif
+ } 
+\ No newline at end of file

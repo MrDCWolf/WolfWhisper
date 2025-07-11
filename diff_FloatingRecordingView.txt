@@ -1,0 +1,728 @@
+diff --git a/WolfWhisper/FloatingRecordingView.swift b/WolfWhisper/FloatingRecordingView.swift
+index 1d8a073..b6bd615 100644
+--- a/WolfWhisper/FloatingRecordingView.swift
++++ b/WolfWhisper/FloatingRecordingView.swift
+@@ -93,41 +93,254 @@ struct EnhancedNoiseField {
+ 
+ struct FloatingRecordingView: View {
+     @ObservedObject var appState: AppStateModel
++    @State private var shouldFadeOut = false
++    @State private var clipboardState: ClipboardState = .none
++    
++    enum ClipboardState {
++        case none
++        case copyingToClipboard
++        case copyingToClipboardAndPasting
++    }
+     
+     var body: some View {
+         ZStack {
+-            // Background with translucent vibrancy material
+-            RoundedRectangle(cornerRadius: 24)
++            // Match main app/settings gradient background
++            RoundedRectangle(cornerRadius: 32, style: .continuous)
++                .fill(
++                    LinearGradient(
++                        gradient: Gradient(colors: [
++                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.3),
++                            Color(red: 0.8, green: 0.6, blue: 0.4).opacity(0.3),
++                            Color(red: 0.5, green: 0.8, blue: 0.6).opacity(0.3)
++                        ]),
++                        startPoint: .topLeading,
++                        endPoint: .bottomTrailing
++                    )
++                )
++            // Overlay glass morphism effect
++            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                 .fill(.ultraThinMaterial)
+-                .overlay(
+-                    RoundedRectangle(cornerRadius: 24)
+-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
++                .opacity(0.8)
++            // Glass border with subtle glow
++            RoundedRectangle(cornerRadius: 32, style: .continuous)
++                .stroke(
++                    LinearGradient(
++                        colors: [
++                            Color.white.opacity(0.6),
++                            Color.white.opacity(0.3),
++                            Color.white.opacity(0.1)
++                        ],
++                        startPoint: .topLeading,
++                        endPoint: .bottomTrailing
++                    ),
++                    lineWidth: 2
+                 )
+-                .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 8)
++            .shadow(color: Color.black.opacity(0.3), radius: 30, x: 0, y: 12)
++            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
++            .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
+             
++            // Content layout
+             VStack(spacing: 20) {
+-                // Main visualizer and content
+-                switch appState.currentState {
+-                case .recording:
+-                    RecordingStateView(audioLevels: appState.audioLevels)
+-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
++                // Waveform at top with padding for max height
++                VStack(spacing: 0) {
++                    Spacer(minLength: 10) // Top padding
+                     
+-                case .transcribing:
+-                    TranscribingStateView()
+-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
++                    switch appState.currentState {
++                    case .recording:
++                        DataWaveVisualizer(audioLevels: appState.audioLevels)
++                            .frame(height: 60)
++                    case .transcribing:
++                        TranscribingWaveVisualizer()
++                            .frame(height: 60)
++                    case .idle:
++                        // Show clipboard animation if copying
++                        if clipboardState != .none {
++                            ClipboardAnimationView()
++                                .frame(height: 60)
++                        } else {
++                            Rectangle()
++                                .fill(Color.clear)
++                                .frame(height: 60)
++                        }
++                    }
++                    
++                    Spacer(minLength: 10) // Bottom padding
++                }
++                .frame(maxHeight: 80)
++                
++                // Status text in middle
++                VStack(spacing: 8) {
++                    Text(statusText)
++                        .font(.system(size: 16, weight: .semibold, design: .rounded))
++                        .foregroundColor(.white)
++                        .multilineTextAlignment(.center)
++                        .transition(.opacity.combined(with: .scale))
+                     
+-                case .idle:
+-                    CompletedStateView()
+-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
++                    Text(subStatusText)
++                        .font(.system(size: 12, weight: .medium, design: .rounded))
++                        .foregroundColor(.white.opacity(0.8))
++                        .multilineTextAlignment(.center)
++                        .transition(.opacity.combined(with: .scale))
++                }
++                .frame(minHeight: 50)
++                
++                // Action button at bottom
++                if shouldShowButton {
++                    Button(action: buttonAction) {
++                        HStack(spacing: 8) {
++                            Image(systemName: buttonIcon)
++                                .font(.system(size: 16, weight: .bold))
++                            Text(buttonText)
++                                .font(.system(size: 14, weight: .semibold, design: .rounded))
++                        }
++                        .padding(.horizontal, 24)
++                        .padding(.vertical, 12)
++                        .background(buttonBackgroundColor)
++                        .foregroundColor(buttonForegroundColor)
++                        .cornerRadius(16)
++                        .shadow(color: buttonShadowColor, radius: 4, x: 0, y: 2)
++                    }
++                    .buttonStyle(PlainButtonStyle())
++                    .transition(.opacity.combined(with: .scale))
+                 }
+             }
+-            .padding(32)
++            .padding(.horizontal, 28)
++            .padding(.vertical, 24)
+         }
+-        .frame(width: 280, height: 280)
++        .frame(width: 360, height: 240)
++        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
++        .opacity(shouldFadeOut ? 0.0 : 1.0)
++        .scaleEffect(shouldFadeOut ? 0.9 : 1.0)
++        .animation(.easeInOut(duration: 0.4), value: shouldFadeOut)
+         .animation(.easeInOut(duration: 0.3), value: appState.currentState)
++        .animation(.easeInOut(duration: 0.3), value: clipboardState)
++        .onChange(of: appState.currentState) { _, newState in
++            handleStateChange(newState)
++        }
+         .onAppear {
+-            withAnimation(.easeInOut(duration: 0.2)) {
+-                // Appearance animation is handled by the window presentation
++            withAnimation(.easeInOut(duration: 0.3)) {
++                // Entrance animation
++            }
++        }
++        .onDisappear {
++            // No animation state variables in scope for this view
++        }
++    }
++    
++    private var statusText: String {
++        switch appState.currentState {
++        case .recording:
++            return "Recording"
++        case .transcribing:
++            return "Transcribing"
++        case .idle:
++            switch clipboardState {
++            case .copyingToClipboard:
++                return "Copying to Clipboard"
++            case .copyingToClipboardAndPasting:
++                return "Copying to Clipboard and Pasting"
++            default:
++                return "Complete!"
++            }
++        }
++    }
++    
++    private var subStatusText: String {
++        switch appState.currentState {
++        case .recording:
++            return "Press hotkey again to stop or use the button below"
++        case .transcribing:
++            return "Transcribing your audio..."
++        case .idle:
++            switch clipboardState {
++            case .copyingToClipboard:
++                return "Text will be available in clipboard"
++            case .copyingToClipboardAndPasting:
++                return "Text will be pasted to active window"
++            default:
++                return "Transcription complete"
++            }
++        }
++    }
++    
++    private var shouldShowButton: Bool {
++        appState.currentState == .recording
++    }
++    
++    private var buttonText: String {
++        "Stop Recording"
++    }
++    
++    private var buttonIcon: String {
++        "stop.circle.fill"
++    }
++    
++    private var buttonBackgroundColor: Color {
++        Color.red.opacity(0.2)
++    }
++    
++    private var buttonForegroundColor: Color {
++        .red
++    }
++    
++    private var buttonShadowColor: Color {
++        .red.opacity(0.15)
++    }
++    
++    private func buttonAction() {
++        Task {
++            do {
++                let audioData = try await AudioService.shared.stopRecording()
++                await MainActor.run {
++                    appState.updateState(to: .transcribing)
++                }
++                try await TranscriptionService.shared.transcribe(
++                    audioData: audioData,
++                    apiKey: appState.settings.apiKey,
++                    model: appState.settings.selectedModel.rawValue
++                )
++            } catch {
++                await MainActor.run {
++                    appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
++                }
++            }
++        }
++    }
++    
++    private func handleStateChange(_ newState: AppState) {
++        switch newState {
++        case .recording, .transcribing:
++            // CRITICAL FIX: Reset the local state when a new cycle begins.
++            // This removes the old ClipboardAnimationView.
++            clipboardState = .none
++            shouldFadeOut = false
++            
++        case .idle:
++            // This logic is already correct.
++            if clipboardState == .none {
++                if appState.lastTranscriptionSuccessful {
++                    // Show clipboard animation on success
++                    if appState.wasRecordingStartedByHotkey {
++                        clipboardState = .copyingToClipboardAndPasting
++                    } else {
++                        clipboardState = .copyingToClipboard
++                    }
++                    
++                    // After a delay, fade out and close
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
++                        withAnimation(.easeInOut(duration: 0.4)) {
++                            shouldFadeOut = true
++                        }
++                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
++                            NotificationCenter.default.post(name: NSNotification.Name("CloseFloatingWindow"), object: nil)
++                        }
++                    }
++                } else {
++                    // On failure, close immediately
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
++                        NotificationCenter.default.post(name: NSNotification.Name("CloseFloatingWindow"), object: nil)
++                    }
++                }
+             }
+         }
+     }
+@@ -136,27 +349,289 @@ struct FloatingRecordingView: View {
+ // MARK: - Recording State View with Data Wave Visualizer
+ struct RecordingStateView: View {
+     let audioLevels: [Float]
++    @EnvironmentObject var appState: AppStateModel
+     
+     var body: some View {
+-        VStack(spacing: 24) {
++        VStack(spacing: 16) {
+             // Data Wave Visualizer
+             DataWaveVisualizer(audioLevels: audioLevels)
++                .frame(height: 40)
+             
+-            VStack(spacing: 8) {
++            VStack(spacing: 5) {
+                 // Status text with animated ellipsis
+                 HStack(spacing: 0) {
+                     Text("Recording")
+-                        .font(.title3.weight(.medium))
++                        .font(.system(size: 11.2, weight: .medium))
+                         .foregroundStyle(.primary)
+-                    
+                     AnimatedEllipsis()
+                 }
+-                
+                 // Instructional text
+-                Text("Press hotkey again to stop")
+-                    .font(.footnote)
++                Text("Press hotkey again to stop or use the button below")
++                    .font(.system(size: 5.4))
+                     .foregroundStyle(.secondary)
+             }
++            // Stop Recording Button
++            Button(action: {
++                Task {
++                    do {
++                        let audioData = try await AudioService.shared.stopRecording()
++                        await MainActor.run {
++                            appState.updateState(to: .transcribing)
++                        }
++                        // Transcribe the audio
++                        try await TranscriptionService.shared.transcribe(
++                            audioData: audioData,
++                            apiKey: appState.settings.apiKey,
++                            model: appState.settings.selectedModel.rawValue
++                        )
++                    } catch {
++                        await MainActor.run {
++                            appState.updateState(to: .idle, message: "Failed to process recording: \(error.localizedDescription)")
++                        }
++                    }
++                }
++            }) {
++                HStack {
++                    Image(systemName: "stop.circle.fill")
++                        .font(.system(size: 15, weight: .bold))
++                    Text("Stop Recording")
++                        .font(.system(size: 12.6, weight: .semibold, design: .rounded))
++                }
++                .padding(.horizontal, 16)
++                .padding(.vertical, 8)
++                .background(Color.red.opacity(0.15))
++                .foregroundColor(.red)
++                .cornerRadius(8)
++                .shadow(color: .red.opacity(0.08), radius: 4, x: 0, y: 1)
++            }
++            .buttonStyle(PlainButtonStyle())
++        }
++    }
++}
++
++// MARK: - Transcribing Wave Visualizer
++struct TranscribingWaveVisualizer: View {
++    private let barCount = 32
++    private let barSpacing: CGFloat = 2
++    private let visualizerWidth: CGFloat = 160
++    private let visualizerHeight: CGFloat = 80
++    
++    var body: some View {
++        TimelineView(.animation) { timeline in
++            let currentTime = timeline.date.timeIntervalSinceReferenceDate
++            
++            HStack(spacing: barSpacing) {
++                ForEach(0..<barCount, id: \.self) { index in
++                    TranscribingWaveBar(
++                        index: index,
++                        barCount: barCount,
++                        time: currentTime,
++                        maxHeight: visualizerHeight
++                    )
++                }
++            }
++            .frame(width: visualizerWidth, height: visualizerHeight)
++        }
++        .onAppear {
++            // No setup needed
++        }
++        .onDisappear {
++            // No cleanup needed
++        }
++    }
++}
++
++// MARK: - Transcribing Wave Bar
++struct TranscribingWaveBar: View {
++    let index: Int
++    let barCount: Int
++    let time: Double
++    let maxHeight: CGFloat
++    
++    private var barWidth: CGFloat {
++        160 / CGFloat(barCount) - 2
++    }
++    
++    private var animatedHeight: CGFloat {
++        // Create a rolling wave pattern that continuously moves
++        let waveSpeed = 2.0
++        let waveFrequency = 0.4
++        let waveAmplitude = 0.6
++        
++        let baseWave = Darwin.sin(time * waveSpeed + Double(index) * waveFrequency) * waveAmplitude
++        let secondaryWave = Darwin.sin(time * waveSpeed * 1.3 + Double(index) * waveFrequency * 0.7) * 0.3
++        
++        let normalizedLevel = (baseWave + secondaryWave + 1.0) / 2.0 // Normalize to 0-1
++        let height = CGFloat(normalizedLevel) * maxHeight * 0.8 + maxHeight * 0.2
++        
++        return max(4, height)
++    }
++    
++    private var rainbowColor: Color {
++        // Create animated rainbow that flows with the wave
++        let normalizedPosition = Double(index) / Double(barCount - 1)
++        let timeOffset = time * 0.3 // Slow color flow
++        
++        // Rainbow progression with time-based animation
++        let hue = (0.8 - (normalizedPosition * 0.8) + timeOffset).truncatingRemainder(dividingBy: 1.0)
++        
++        return Color(
++            hue: hue,
++            saturation: 0.85,
++            brightness: 0.8
++        )
++    }
++    
++    var body: some View {
++        VStack {
++            Spacer()
++            
++            RoundedRectangle(cornerRadius: barWidth / 2)
++                .fill(
++                    LinearGradient(
++                        colors: [
++                            rainbowColor.opacity(0.9),
++                            rainbowColor.opacity(0.7),
++                            rainbowColor.opacity(0.5)
++                        ],
++                        startPoint: .top,
++                        endPoint: .bottom
++                    )
++                )
++                .frame(width: barWidth, height: animatedHeight)
++                .shadow(color: rainbowColor.opacity(0.4), radius: 2, x: 0, y: 1)
++            
++            Spacer()
++        }
++        .frame(height: maxHeight)
++    }
++}
++
++// MARK: - Clipboard Animation View
++struct ClipboardAnimationView: View {
++    @State private var pulseScale: CGFloat = 1.0
++    @State private var glowOpacity: Double = 0.0
++    @State private var checkmarkScale: CGFloat = 0.0
++    @State private var checkmarkOpacity: Double = 0.0
++    @State private var sparkleAngles: [Double] = []
++    @State private var sparkleScales: [CGFloat] = []
++    @State private var isAnimating = false
++    
++    var body: some View {
++        ZStack {
++            // Background circle with pulse animation
++            Circle()
++                .fill(
++                    LinearGradient(
++                        colors: [
++                            Color.cyan.opacity(0.3),
++                            Color.blue.opacity(0.2),
++                            Color.blue.opacity(0.1)
++                        ],
++                        startPoint: .topLeading,
++                        endPoint: .bottomTrailing
++                    )
++                )
++                .frame(width: 80, height: 80)
++                .scaleEffect(pulseScale)
++                .opacity(glowOpacity)
++                .blur(radius: 2)
++                .animation(isAnimating ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: pulseScale)
++            
++            // Main clipboard icon
++            ZStack {
++                // Clipboard background
++                RoundedRectangle(cornerRadius: 8)
++                    .fill(Color.white.opacity(0.9))
++                    .frame(width: 32, height: 40)
++                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
++                
++                // Clipboard clip
++                RoundedRectangle(cornerRadius: 3)
++                    .fill(Color.gray.opacity(0.7))
++                    .frame(width: 14, height: 6)
++                    .offset(y: -17)
++                
++                // Document lines
++                VStack(spacing: 3) {
++                    Rectangle()
++                        .fill(Color.gray.opacity(0.4))
++                        .frame(width: 20, height: 2)
++                    Rectangle()
++                        .fill(Color.gray.opacity(0.4))
++                        .frame(width: 16, height: 2)
++                    Rectangle()
++                        .fill(Color.gray.opacity(0.4))
++                        .frame(width: 18, height: 2)
++                }
++                .offset(y: 2)
++                
++                // Checkmark overlay
++                Image(systemName: "checkmark")
++                    .font(.system(size: 28, weight: .bold))
++                    .foregroundColor(.blue)
++                    .scaleEffect(checkmarkScale)
++                    .opacity(checkmarkOpacity)
++                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 0)
++            }
++            
++            // Sparkles around the clipboard
++            ForEach(0..<8, id: \.self) { index in
++                Image(systemName: "sparkles")
++                    .font(.system(size: 12, weight: .medium))
++                    .foregroundColor(.yellow)
++                    .scaleEffect(sparkleScales.count > index ? sparkleScales[index] : 0.0)
++                    .offset(
++                        x: cos(sparkleAngles.count > index ? sparkleAngles[index] : 0) * 45,
++                        y: sin(sparkleAngles.count > index ? sparkleAngles[index] : 0) * 45
++                    )
++                    .opacity(sparkleScales.count > index ? Double(sparkleScales[index]) : 0.0)
++            }
++        }
++        .onAppear {
++            isAnimating = true
++            startClipboardAnimation()
++        }
++        .onDisappear {
++            isAnimating = false
++            pulseScale = 1.0
++            glowOpacity = 0.0
++            checkmarkScale = 0.0
++            checkmarkOpacity = 0.0
++        }
++    }
++    
++    private func startClipboardAnimation() {
++        // Initialize sparkle positions
++        sparkleAngles = (0..<8).map { Double($0) * .pi / 4 }
++        sparkleScales = Array(repeating: 0.0, count: 8)
++        
++        // Set target values for pulse animation (the .animation modifier will handle the repeat)
++        pulseScale = 1.2
++        glowOpacity = 0.6
++        
++        // Delayed checkmark appearance
++        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
++            withAnimation(.spring(response: 0.5, dampingFraction: 0.6, blendDuration: 0)) {
++                checkmarkScale = 1.0
++                checkmarkOpacity = 1.0
++            }
++        }
++        
++        // Sparkle animation
++        for i in 0..<8 {
++            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
++                withAnimation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0)) {
++                    sparkleScales[i] = 1.0
++                }
++                
++                // Fade out sparkles
++                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
++                    withAnimation(.easeOut(duration: 0.4)) {
++                        sparkleScales[i] = 0.0
++                    }
++                }
++            }
+         }
+     }
+ }
+@@ -204,11 +679,19 @@ struct AudioWaveformBar: View {
+     
+     private var audioLevel: Float {
+         // Map bar index to audio frequency band
++        if audioLevels.isEmpty {
++            // Generate some animation when no audio levels are available
++            let baseLevel = Float(Darwin.sin(time * 2 + Double(index) * 0.3)) * 0.3 + 0.4
++            return max(0.1, baseLevel)
++        }
++        
+         let audioIndex = Int(Float(index) / Float(barCount) * Float(audioLevels.count))
+         if audioIndex < audioLevels.count {
+-            return audioLevels[audioIndex]
++            let level = audioLevels[audioIndex]
++            // Ensure minimum level for visual feedback
++            return max(0.1, level)
+         }
+-        return 0.0
++        return 0.1
+     }
+     
+     private var animatedHeight: CGFloat {
+@@ -249,7 +732,7 @@ struct AudioWaveformBar: View {
+                 )
+                 .frame(width: barWidth, height: animatedHeight)
+                 .shadow(color: rainbowColor.opacity(0.3), radius: 2, x: 0, y: 1)
+-                .animation(.easeInOut(duration: 0.1), value: Double(audioLevel))
++                .animation(.easeOut(duration: 0.05), value: Double(audioLevel))
+             
+             Spacer()
+         }
+@@ -261,15 +744,15 @@ struct AudioWaveformBar: View {
+ struct TranscribingStateView: View {
+     var body: some View {
+         VStack(spacing: 24) {
+-            // Transform wave into processing indicator
+-            ProcessingIndicator()
++            // Beautiful rolling waveform for transcribing
++            TranscribingWaveVisualizer()
+             
+             VStack(spacing: 8) {
+                 Text("Transcribing")
+                     .font(.title3.weight(.medium))
+                     .foregroundStyle(.primary)
+                 
+-                Text("Please wait...")
++                Text("Transcribing your audio...")
+                     .font(.footnote)
+                     .foregroundStyle(.secondary)
+             }
+@@ -307,9 +790,11 @@ struct CompletedStateView: View {
+ 
+ // MARK: - Processing Indicator
+ struct ProcessingIndicator: View {
+-    @State private var rotationAngle: Double = 0
+     @State private var pulseScale: CGFloat = 1.0
+-    @State private var nodeOpacity: Double = 0.5
++    @State private var glowOpacity: Double = 0.0
++    @State private var rotationAngle: Double = 0.0
++    @State private var nodeOpacity: Double = 0.0
++    @State private var isAnimating = false
+     
+     var body: some View {
+         ZStack {
+@@ -325,6 +810,7 @@ struct ProcessingIndicator: View {
+                 )
+                 .frame(width: 100, height: 100)
+                 .rotationEffect(.degrees(rotationAngle))
++                .animation(isAnimating ? .linear(duration: 4).repeatForever(autoreverses: false) : .default, value: rotationAngle)
+             
+             // Middle ring
+             Circle()
+@@ -356,6 +842,7 @@ struct ProcessingIndicator: View {
+                     )
+                     .rotationEffect(.degrees(rotationAngle * 0.5))
+                     .opacity(nodeOpacity)
++                    .animation(isAnimating ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default, value: nodeOpacity)
+             }
+             
+             // Central brain
+@@ -364,6 +851,7 @@ struct ProcessingIndicator: View {
+                     .fill(Color.white)
+                     .frame(width: 40, height: 32)
+                     .scaleEffect(pulseScale)
++                    .animation(isAnimating ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default, value: pulseScale)
+                 
+                 Image(systemName: "brain")
+                     .font(.system(size: 24, weight: .medium))
+@@ -374,26 +862,27 @@ struct ProcessingIndicator: View {
+         .onAppear {
+             startProcessingAnimations()
+         }
++        .onDisappear {
++            isAnimating = false
++            pulseScale = 1.0
++            glowOpacity = 0.0
++            rotationAngle = 0.0
++            nodeOpacity = 0.0
++        }
+     }
+     
+     private func startProcessingAnimations() {
+-        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+-            rotationAngle = 360
+-        }
+-        
+-        withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+-            pulseScale = 1.15
+-        }
+-        
+-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+-            nodeOpacity = 1.0
+-        }
++        isAnimating = true
++        rotationAngle = 360
++        pulseScale = 1.15
++        nodeOpacity = 1.0
+     }
+ }
+ 
+ // MARK: - Animated Ellipsis
+ struct AnimatedEllipsis: View {
+     @State private var animationPhase: Double = 0
++    @State private var isAnimating = false
+     
+     var body: some View {
+         HStack(spacing: 2) {
+@@ -403,16 +892,21 @@ struct AnimatedEllipsis: View {
+                     .foregroundStyle(.primary)
+                     .opacity(dotOpacity(for: index))
+                     .animation(
+-                        .easeInOut(duration: 0.6)
++                        isAnimating ? .easeInOut(duration: 0.6)
+                         .repeatForever(autoreverses: false)
+-                        .delay(Double(index) * 0.2),
++                        .delay(Double(index) * 0.2) : .default,
+                         value: animationPhase
+                     )
+             }
+         }
+         .onAppear {
++            isAnimating = true
+             animationPhase = 1
+         }
++        .onDisappear {
++            isAnimating = false
++            animationPhase = 0
++        }
+     }
+     
+     private func dotOpacity(for index: Int) -> Double {

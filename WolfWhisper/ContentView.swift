@@ -103,7 +103,24 @@ struct ContentView: View {
             if appState.currentState == .idle {
                 appState.lastTranscriptionSuccessful = false
                 guard appState.settings.isConfigured else {
-                    appState.showSettings = true
+                    NSApp.activate(ignoringOtherApps: true)
+                    if let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
+                        settingsWindow.makeKeyAndOrderFront(nil)
+                    } else {
+                        // Fallback: create a new settings window
+                        let settingsView = SettingsView(appState: appState)
+                        let hostingController = NSHostingController(rootView: settingsView)
+                        let settingsWindow = NSWindow(
+                            contentRect: NSRect(x: 0, y: 0, width: 490, height: 350),
+                            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                            backing: .buffered,
+                            defer: false
+                        )
+                        settingsWindow.title = "Settings"
+                        settingsWindow.contentViewController = hostingController
+                        settingsWindow.center()
+                        settingsWindow.makeKeyAndOrderFront(nil)
+                    }
                     return
                 }
                 Task {
@@ -248,7 +265,24 @@ private func handleRecordingButtonTap(appState: AppStateModel) {
     switch appState.currentState {
     case .idle:
         guard appState.settings.isConfigured else {
-            appState.showSettings = true
+            NSApp.activate(ignoringOtherApps: true)
+            if let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
+                settingsWindow.makeKeyAndOrderFront(nil)
+            } else {
+                // Fallback: create a new settings window
+                let settingsView = SettingsView(appState: appState)
+                let hostingController = NSHostingController(rootView: settingsView)
+                let settingsWindow = NSWindow(
+                    contentRect: NSRect(x: 0, y: 0, width: 490, height: 350),
+                    styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                    backing: .buffered,
+                    defer: false
+                )
+                settingsWindow.title = "Settings"
+                settingsWindow.contentViewController = hostingController
+                settingsWindow.center()
+                settingsWindow.makeKeyAndOrderFront(nil)
+            }
             return
         }
         
