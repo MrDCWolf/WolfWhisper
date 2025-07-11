@@ -282,11 +282,20 @@ class AppStateModel: ObservableObject {
     }
     
     func updateState(to newState: AppState, message: String? = nil) {
-        // CRITICAL FIX: If we are transitioning TO the idle state,
-        // ensure all audio resources are forcefully cleaned up.
+        // REMOVE THIS BLOCK - it's too aggressive and causes microphone sharing conflicts
+        // if newState == .idle && currentState != .idle {
+        //     AudioService.shared.forceCleanup()
+        //     
+        //     #if DEBUG
+        //     stopCPUMonitoring()  // Ensure CPU monitoring stops
+        //     #endif
+        // }
+        
+        #if DEBUG
         if newState == .idle && currentState != .idle {
-            AudioService.shared.forceCleanup()
+            stopCPUMonitoring()  // Keep CPU monitoring cleanup but remove audio cleanup
         }
+        #endif
         
         currentState = newState
         

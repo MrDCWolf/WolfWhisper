@@ -6,6 +6,7 @@ struct WaveformView: View {
     let barCount: Int
     
     @State private var animationPhase: Double = 0
+    @Environment(\.controlActiveState) private var controlActiveState
     
     init(audioLevels: [Float] = [], isRecording: Bool = false, barCount: Int = 32) {
         self.audioLevels = audioLevels

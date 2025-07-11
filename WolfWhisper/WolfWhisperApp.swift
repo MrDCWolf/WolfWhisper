@@ -218,13 +218,21 @@ struct WolfWhisperApp: App {
         }
     }
     
-        private func cleanupFloatingWindow() {
+    private func cleanupFloatingWindow() {
+        // Force remove any active animations/timers in the view
+        if let hostingController = floatingRecordingWindow?.contentViewController as? NSHostingController<FloatingRecordingView> {
+            hostingController.rootView = FloatingRecordingView(appState: AppStateModel()) // Reset with dummy state
+        }
+        
         // Remove notification observer
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
             notificationObserver = nil
         }
 
+        // Force hide before close to ensure proper cleanup
+        floatingRecordingWindow?.orderOut(nil)
+        
         // Close window if it exists
         if floatingRecordingWindow != nil {
             floatingRecordingWindow?.close()

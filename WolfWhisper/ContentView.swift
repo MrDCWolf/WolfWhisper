@@ -6,10 +6,10 @@ struct ContentView: View {
     @StateObject private var audioService = AudioService.shared
     @StateObject private var transcriptionService = TranscriptionService.shared
     @StateObject private var hotkeyService = HotkeyService.shared
-    @State private var isWindowVisible = true
+    @Environment(\.controlActiveState) private var controlActiveState
     
     var body: some View {
-        MainAppView(appState: appState, isWindowVisible: isWindowVisible)
+        MainAppView(appState: appState, isWindowActive: controlActiveState == .key)
         .onAppear {
             setupServices()
             setupHotkey()
@@ -20,12 +20,6 @@ struct ContentView: View {
             audioService.onAudioLevelsUpdate = nil
             transcriptionService.onTranscriptionComplete = nil
             hotkeyService.onHotkeyPressed = nil
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            isWindowVisible = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
-            isWindowVisible = false
         }
         .onChange(of: appState.settings.hotkeyEnabled) {
             setupHotkey()
@@ -155,7 +149,7 @@ struct ContentView: View {
 
 struct MainAppView: View {
     @ObservedObject var appState: AppStateModel
-    let isWindowVisible: Bool
+    let isWindowActive: Bool
     
     var body: some View {
         ZStack {
@@ -189,7 +183,8 @@ struct MainAppView: View {
                         appState: appState,
                         action: {
                             handleRecordingButtonTap(appState: appState)
-                        }
+                        },
+                        isWindowActive: isWindowActive
                     )
                     
                     Text(appState.statusText)
@@ -295,6 +290,7 @@ struct ModernRecordingButton: View {
     let audioLevels: [Float]
     @ObservedObject var appState: AppStateModel
     let action: () -> Void
+    let isWindowActive: Bool
 
     var body: some View {
         ZStack {
@@ -318,9 +314,9 @@ struct ModernRecordingButton: View {
                             ModernCompletedContent()
                         }
                     case .recording:
-                        ModernRecordingContent(audioLevels: audioLevels, appState: appState, isWindowVisible: true)
+                        ModernRecordingContent(audioLevels: audioLevels, appState: appState, isWindowActive: isWindowActive)
                     case .transcribing:
-                        ModernTranscribingContentNew(appState: appState, isWindowVisible: true)
+                        ModernTranscribingContentNew(appState: appState, isWindowActive: isWindowActive)
                     }
                 }
             }
@@ -344,37 +340,28 @@ struct ModernIdleContent: View {
 struct ModernRecordingContent: View {
     let audioLevels: [Float]
     @ObservedObject var appState: AppStateModel
-    let isWindowVisible: Bool
+    let isWindowActive: Bool
+    
     var body: some View {
         ZStack {
             Circle()
                 .fill(Color.white.opacity(0.1))
                 .frame(width: 70, height: 70)
-            if appState.currentState == .recording && isWindowVisible {
-                MiniWaveVisualizer(audioLevels: audioLevels, isActive: true)
-            } else {
-                MiniWaveVisualizer(audioLevels: audioLevels, isActive: false)
-            }
+            MiniWaveVisualizer(audioLevels: audioLevels, isActive: appState.currentState == .recording && isWindowActive)
         }
     }
 }
 
 struct ModernTranscribingContentNew: View {
     @ObservedObject var appState: AppStateModel
-    let isWindowVisible: Bool
+    let isWindowActive: Bool
+    
     var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: 70, height: 70)
-                MiniTranscribingVisualizer(isActive: appState.currentState == .transcribing && isWindowVisible)
-            }
-            Text("Transcribing... The result will be copied to your clipboard.")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 2)
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 70, height: 70)
+            MiniTranscribingVisualizer(isActive: appState.currentState == .transcribing && isWindowActive)
         }
     }
 }
@@ -502,10 +489,11 @@ struct ModernCompletedContent: View {
 struct MiniWaveVisualizer: View {
     let audioLevels: [Float]
     let isActive: Bool
+    @Environment(\.controlActiveState) private var controlActiveState
     private let barCount = 16
     private let barSpacing: CGFloat = 1.5
     var body: some View {
-        if isActive {
+        if controlActiveState == .key && isActive {
             TimelineView(.animation) { timeline in
                 let currentTime = timeline.date.timeIntervalSinceReferenceDate
                 HStack(spacing: barSpacing) {

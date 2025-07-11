@@ -95,6 +95,7 @@ struct FloatingRecordingView: View {
     @ObservedObject var appState: AppStateModel
     @State private var shouldFadeOut = false
     @State private var clipboardState: ClipboardState = .none
+    @Environment(\.controlActiveState) private var controlActiveState
     
     enum ClipboardState {
         case none
@@ -145,24 +146,25 @@ struct FloatingRecordingView: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 10) // Top padding
                     
-                    switch appState.currentState {
-                    case .recording:
-                        DataWaveVisualizer(audioLevels: appState.audioLevels)
-                            .frame(height: 60)
-                    case .transcribing:
-                        TranscribingWaveVisualizer()
-                            .frame(height: 60)
-                    case .idle:
-                        // Show clipboard animation if copying
-                        if clipboardState != .none {
-                            ClipboardAnimationView()
-                                .frame(height: 60)
-                        } else {
-                            Rectangle()
-                                .fill(Color.clear)
+                    if controlActiveState == .key && appState.currentState == .recording {
+                        TimelineView(.animation) { timeline in
+                            DataWaveVisualizer(audioLevels: appState.audioLevels)
                                 .frame(height: 60)
                         }
-                    }
+                    } else if appState.currentState == .recording {
+                        DataWaveVisualizer(audioLevels: appState.audioLevels)
+                            .frame(height: 60)
+                        } else if appState.currentState == .transcribing {
+                            if controlActiveState == .key {
+                                TimelineView(.animation) { timeline in
+                                    TranscribingWaveVisualizer()
+                                        .frame(height: 60)
+                                }
+                            } else {
+                                TranscribingWaveVisualizer()
+                                    .frame(height: 60)
+                            }
+                        }
                     
                     Spacer(minLength: 10) // Bottom padding
                 }
