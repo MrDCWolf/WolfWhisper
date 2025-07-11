@@ -171,6 +171,7 @@
 		70BD488355FF87CD7DC2CAC9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = WolfWhisper/WolfWhisper.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application: Daniel Wolf (ZT6QMA463J)";
@@ -316,6 +317,7 @@
 		9E0CF54DF29E1F832513F058 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = WolfWhisper/WolfWhisper.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application: Daniel Wolf (ZT6QMA463J)";
