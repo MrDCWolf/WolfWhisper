@@ -24,6 +24,8 @@ targets:
         NSMicrophoneUsageDescription: "WolfWhisper needs microphone access to record your voice for dictation."
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.wolfwhisper.app
+      PRODUCT_NAME: WolfWhisper
+      PRODUCT_MODULE_NAME: WolfWhisper
       SWIFT_VERSION: 6.0
       GENERATE_INFOPLIST_FILE: NO
       INFOPLIST_FILE: WolfWhisper/Info.plist

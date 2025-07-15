@@ -1,0 +1,31 @@
+{
+  "title": "WolfWhisper",
+  "icon": "/Users/elvis/Library/Developer/Xcode/DerivedData/WolfWhisper-cqcufznzoippxddsduwlchijymys/Build/Products/Release/WolfWhisper.app/Contents/Resources/AppIcon.icns",
+  "background": "/Users/elvis/Projects/WolfWhisper/background.png",
+  "format": "UDBZ",
+  "window": {
+    "size": {
+      "width": 768,
+      "height": 512
+    },
+    "position": {
+      "x": 200,
+      "y": 120
+    }
+  },
+  "icon-size": 80,
+  "contents": [
+    {
+      "x": 200,
+      "y": 256,
+      "type": "file",
+      "path": "/Users/elvis/Library/Developer/Xcode/DerivedData/WolfWhisper-cqcufznzoippxddsduwlchijymys/Build/Products/Release/WolfWhisper.app"
+    },
+    {
+      "x": 568,
+      "y": 256,
+      "type": "link",
+      "path": "/Applications"
+    }
+  ]
+} 
